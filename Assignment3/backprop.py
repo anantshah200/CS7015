@@ -19,7 +19,12 @@ def get_specs() :
 	parser.add_argument("--activation",help="type of activation function in the layers")
 
 
-def initialize_parameters() :
-	"Function to initialize the arguments"
+def initialize_parameters(num_hidden,sizes) :
+	"Function to initialize the arguments
+	 Parameters : num_hidden - Number of hidden layers 
+	 	sizes - a list with number of perceptrons in each hidden layer"
 	np.random.seed(1234)
 	parameters = {}
+	for i in range(1,num_hidden+1) :
+		parameters["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
+		parameters["b"+str(i)] = 0.0
