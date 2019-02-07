@@ -86,13 +86,18 @@ def feed_forward(X,activation,parameters,sizes,cache) :
 	layers = sizes.shape[0] # Total number of layers = hidden_layers + input_layer + output_layer
 	H_prev = X
 
-	for i in range(1,layers) :
+	for i in range(1,layers-1) :
 		W = parameters["W"+str(i)]
 		b = parameters["b"+str(i)]
 		H = forward_layer(H_prev,activation,W,b,i,cache)
 		H_prev = H
 	
-	Y_hat = softmax(H)
+	# The last layer has a softmax function hence we need to perform the computation separately
+	b = parameters["b"+str(layers-1)]
+	W = parameters["W"+str(layers-1)]
+	A = np.dot(W,H_prev)+b
+	cache["A"+str(layers-1)] = A
+	Y_hat = softmax(A)
 	assert Y_hat.shape == (sizes[layers-1],m)
 	return Y_hat
 
@@ -109,6 +114,28 @@ def cost(Y,Y_hat,loss) :
 		error = -np.sum((Y*np.log(Y_hat) + (1-Y)*np.log(1-Y_hat)))
 	return error 
 
+def back_layer(layer,cache,grads,activation) :
+	"Function to compute the gradient of the loss with respect to the pre-activation of a layer"
+	dH = grads["dH"+str(layer)] # Gradient of the loss with respect to the activations of a <layer>
+	A = cache["A"+str(layer)]
+	H_prev = cache["H"+str(layer-1)]
+	# We will be using the chain rule. It will lead to a point-wise multiplication as there is only 1 path from the pre-activation to the post-activation of a layer
+	if activation=="tanh" :
+		dA = dH * (1-tanh(A)**2)
+		dW = np.dot(dA,H_prev.T)
+		db = dA
+		grads["dA"+str(layer)] = dA
+		grads["dW"+str(layer)] = dW
+		grads["db"+str(layer)] = db
+	elif activation=="sigmoid" :
+		dA = dH * sigmoid(A) * (1-sigmoid(A))
+		dW = np.dot(dA,H_prev.T)
+		db = dA
+		grads["dA"+str(layer)] = dA
+		grads["dW"+str(layer)] = dW
+		grads["db"+str(layer)] = db
+	return dA
+
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
 print(sizes.shape[0])
@@ -121,6 +148,7 @@ Y = np.array([[1,0,0],[0,1,1]])
 #W = params["W1"]
 #b = params["b1"]
 cache = {}
+grads = {}
 Y_hat = feed_forward(X,"sigmoid",params,sizes,cache)
 error = cost(Y,Y_hat,"ce")
 print("True Output :" + str(Y))
