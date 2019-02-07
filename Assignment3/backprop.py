@@ -114,27 +114,35 @@ def cost(Y,Y_hat,loss) :
 		error = -np.sum((Y*np.log(Y_hat) + (1-Y)*np.log(1-Y_hat)))
 	return error 
 
-def back_layer(layer,cache,grads,activation) :
+def back_layer(layer,cache,grads,parameters,activation) :
 	"Function to compute the gradient of the loss with respect to the pre-activation of a layer"
 	dH = grads["dH"+str(layer)] # Gradient of the loss with respect to the activations of a <layer>
 	A = cache["A"+str(layer)]
 	H_prev = cache["H"+str(layer-1)]
+	W = parameters["W"+str(layer)]
 	# We will be using the chain rule. It will lead to a point-wise multiplication as there is only 1 path from the pre-activation to the post-activation of a layer
 	if activation=="tanh" :
 		dA = dH * (1-tanh(A)**2)
 		dW = np.dot(dA,H_prev.T)
-		db = dA
+		db = np.sum(dA,axis=1)
+		dH_prev = np.dot(W.T,dA)
 		grads["dA"+str(layer)] = dA
 		grads["dW"+str(layer)] = dW
 		grads["db"+str(layer)] = db
+		grads["dH"+str(layer-1)] = dH_prev
 	elif activation=="sigmoid" :
 		dA = dH * sigmoid(A) * (1-sigmoid(A))
 		dW = np.dot(dA,H_prev.T)
-		db = dA
+		db = np.sum(dA,axis=1)
+		dH_prev = np.dot(W.T,dA)
 		grads["dA"+str(layer)] = dA
 		grads["dW"+str(layer)] = dW
 		grads["db"+str(layer)] = db
-	return dA
+		grads["dH"+str(layer-1)] = dH_prev
+	return dH_prev
+
+def back_prop() :
+	"Function to backpropagate through the network to update the weights"
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
