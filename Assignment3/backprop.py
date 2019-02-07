@@ -32,15 +32,25 @@ def initialize_parameters(num_hidden,sizes) :
 	
 	return parameters
 
-def sigmoid(Z) :
+def sigmoid(A) :
 	# Implement the logistic function
-	return 1.0/(1.0 + np.exp(-Z))
+	return 1.0/(1.0 + np.exp(-A))
 
-def tanh(Z) :
+def tanh(A) :
 	# Implement the tanh function
-	return np.tanh(Z)
+	return np.tanh(A)
 
-def forward_layer(A_prev,activation,W,b,layer,cache) :
+def softmax(A) :
+	# Given a matrix of values, this function will return the softmax values
+	m = A.shape[0]
+	n = A.shape[1]
+	A_exp = np.exp(A) # Found the exponential of all the values
+	e_sum = np.sum(A_exp,axis=0)
+	A_softmax = A_exp/e_sum
+	assert A_softmax.shape == (m,n)
+	return A_softmax
+
+def forward_layer(H_prev,activation,W,b,layer,cache) :
 	# Function to perform the forward pass of a hidden layer in the neural network
 	# Parameters :  A_prev - The activation obtained from the previous layer(acting as X for the next layer)
 	#	        activation - THe type of activation function in the layer
@@ -49,20 +59,20 @@ def forward_layer(A_prev,activation,W,b,layer,cache) :
 	#		layer - The layer in the neural network(starting from 1)
 	#		cache - Dictionary to store the activation values required for the backward pass
 
-	m = A_prev.shape[1] # Number of training examples
-	assert A_prev.shape[0] == W.shape[1]
+	m = H_prev.shape[1] # Number of training examples
+	assert H_prev.shape[0] == W.shape[1]
 
-	Z = np.dot(W,A_prev)+b
-	cache["Z"+str(layer)] = Z
+	A = np.dot(W,H_prev)+b
+	cache["A"+str(layer)] = A
 	if(activation == "sigmoid") :
-		A = sigmoid(Z)
-		cache["A"+str(layer)] = A
+		H = sigmoid(A)
+		cache["H"+str(layer)] = H
 	elif (activation == "tanh") :
-		A = tanh(Z)
-		cache["A"+str(layer)] = A
+		H = tanh(A)
+		cache["H"+str(layer)] = H
 
-	assert A.shape == (W.shape[0],m)
-	return A
+	assert H.shape == (W.shape[0],m)
+	return H
 
 def feed_forward(X,activation,parameters,sizes,cache) :
 	# Function to implement the forward pass throughout the whole network
@@ -74,24 +84,30 @@ def feed_forward(X,activation,parameters,sizes,cache) :
 
 	m = X.shape[1] # Number of training examples
 	layers = sizes.shape[0] # Total number of layers = hidden_layers + input_layer + output_layer
-	A_prev = X
+	H_prev = X
 
 	for i in range(1,layers) :
 		W = parameters["W"+str(i)]
 		b = parameters["b"+str(i)]
-		A = forward_layer(A_prev,activation,W,b,i,cache)
-		A_prev = A
+		H = forward_layer(H_prev,activation,W,b,i,cache)
+		H_prev = H
 	
-	Y = A # Output(predictions) of the neural network
-	assert Y.shape == (sizes[layers-1],m)
-	return Y
+	Y_hat = softmax(H)
+	assert Y_hat.shape == (sizes[layers-1],m)
+	return Y_hat
 
 def cost(Y,Y_hat,loss) :
 	# Function to calculate the error in prediction by the neural network
 	# Parameters :  Y - Actual labels for the data
 	#			Y_hat - Predicted probabilities of the labels
 	#		loss - The type of loss (either square error or entropy)
-	
+	assert Y.shape == Y_hat.shape
+	m = Y.shape[1]
+	if (loss == "sq") :
+		error = np.sum((Y-Y_hat)**2)/m
+	elif (loss == "ce") :
+		error = -np.sum((Y*np.log(Y_hat) + (1-Y)*np.log(1-Y_hat)))
+	return error 
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
@@ -101,8 +117,12 @@ print("W1 : "+str(params["W1"]))
 #print("W4 : "+str(params["W4"]))
 #print("b1 : "+str(params["b1"]))
 X = np.array([[-3.34,-2.12,1.56],[0.89,2.12,0.45],[0.21,-1.98,1.56],[-0.12,0.12,1.15]])
+Y = np.array([[1,0,0],[0,1,1]])
 #W = params["W1"]
 #b = params["b1"]
 cache = {}
-Y = feed_forward(X,"sigmoid",params,sizes,cache)
-print("Output :" + str(Y))
+Y_hat = feed_forward(X,"sigmoid",params,sizes,cache)
+error = cost(Y,Y_hat,"ce")
+print("True Output :" + str(Y))
+print("Predicted Probabilities : "+str(Y_hat))
+print("Cost : " + str(error))
