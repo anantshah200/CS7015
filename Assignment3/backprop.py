@@ -25,12 +25,12 @@ def initialize_parameters(num_hidden,sizes) :
 	#	       sizes - a list with number of perceptrons in each hidden layer including the input layer and output layer
 
 	np.random.seed(1234)
-	parameters = {}
+	theta = {}
 	for i in range(1,num_hidden+2) :
-		parameters["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
-		parameters["b"+str(i)] = np.zeros((sizes[i],1))
+		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
+		theta["b"+str(i)] = np.zeros((sizes[i],1))
 	
-	return parameters
+	return theta
 
 def sigmoid(A) :
 	# Implement the logistic function
@@ -74,7 +74,7 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 	assert H.shape == (W.shape[0],m)
 	return H
 
-def feed_forward(X,activation,parameters,sizes,cache) :
+def feed_forward(X,activation,theta,sizes,cache) :
 	# Function to implement the forward pass throughout the whole network
 	# Parameters :  X - Input Data
 	#		activation - The type of activation in the hidden layers
@@ -87,14 +87,14 @@ def feed_forward(X,activation,parameters,sizes,cache) :
 	H_prev = X
 
 	for i in range(1,layers-1) :
-		W = parameters["W"+str(i)]
-		b = parameters["b"+str(i)]
+		W = theta["W"+str(i)]
+		b = theta["b"+str(i)]
 		H = forward_layer(H_prev,activation,W,b,i,cache)
 		H_prev = H
 	
 	# The last layer has a softmax function hence we need to perform the computation separately
-	b = parameters["b"+str(layers-1)]
-	W = parameters["W"+str(layers-1)]
+	b = theta["b"+str(layers-1)]
+	W = theta["W"+str(layers-1)]
 	A = np.dot(W,H_prev)+b
 	cache["A"+str(layers-1)] = A
 	Y_hat = softmax(A)
@@ -109,40 +109,80 @@ def cost(Y,Y_hat,loss) :
 	assert Y.shape == Y_hat.shape
 	m = Y.shape[1]
 	if (loss == "sq") :
-		error = np.sum((Y-Y_hat)**2)/m
+		error = np.sum((Y-Y_hat)**2)/(2*m)
 	elif (loss == "ce") :
-		error = -np.sum((Y*np.log(Y_hat) + (1-Y)*np.log(1-Y_hat)))
+		error = -np.sum((Y*np.log(Y_hat)))
 	return error 
 
-def back_layer(layer,cache,grads,parameters,activation) :
-	"Function to compute the gradient of the loss with respect to the pre-activation of a layer"
+def back_layer(layer,cache,grads,theta,activation) :
+	# Function to compute the gradient of the loss with respect to the pre-activation of a layer
+	# Parameters : layer - The current layer we are acting on
+	#		cache - The data stored from the forward propagation step 
+	#		grads - A dictionary containing the gradients of the loss w.r.t the parameters in the network
+	#		theta - A dictionary containing the weights and biases
+	#		activation - The type of activation in a layer of the neural network
+
 	dH = grads["dH"+str(layer)] # Gradient of the loss with respect to the activations of a <layer>
 	A = cache["A"+str(layer)]
 	H_prev = cache["H"+str(layer-1)]
-	W = parameters["W"+str(layer)]
+	W = theta["W"+str(layer)]
 	# We will be using the chain rule. It will lead to a point-wise multiplication as there is only 1 path from the pre-activation to the post-activation of a layer
 	if activation=="tanh" :
 		dA = dH * (1-tanh(A)**2)
-		dW = np.dot(dA,H_prev.T)
-		db = np.sum(dA,axis=1)
-		dH_prev = np.dot(W.T,dA)
-		grads["dA"+str(layer)] = dA
-		grads["dW"+str(layer)] = dW
-		grads["db"+str(layer)] = db
-		grads["dH"+str(layer-1)] = dH_prev
 	elif activation=="sigmoid" :
 		dA = dH * sigmoid(A) * (1-sigmoid(A))
-		dW = np.dot(dA,H_prev.T)
-		db = np.sum(dA,axis=1)
-		dH_prev = np.dot(W.T,dA)
-		grads["dA"+str(layer)] = dA
-		grads["dW"+str(layer)] = dW
-		grads["db"+str(layer)] = db
-		grads["dH"+str(layer-1)] = dH_prev
-	return dH_prev
+	
+	dW = np.dot(dA,H_prev.T)
+	db = np.sum(dA,axis=1)
+	dH_prev = np.dot(W.T,dA)
+	grads["dA"+str(layer)] = dA
+	grads["dW"+str(layer)] = dW
+	grads["db"+str(layer)] = db
+	grads["dH"+str(layer-1)] = dH_prev
 
-def back_prop() :
-	"Function to backpropagate through the network to update the weights"
+def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
+	# Function to backpropagate through the network to update the weights
+	# Parameters -  X - The input data
+	#		Y - The output data
+	#		Y_hat - Probability distribution of the predicted class
+	#		error - The loss obtained after a forward propagation step
+	#		loss - The type of loss(cross entropy or squared error)
+	#		cache - The data stored from the forward propagation step
+	#		grads - A dictionary containing the gradients of the loss w.r.t the parameters in the network
+	#		theta - A dictionary containing the weights and biases
+	#		activation - The type of activation in a layer of the neural network
+	#		sizes - A vector containing the number of neurons in each layer
+	
+	# First, we need to calculate the derivative of the loss function w.r.t the output layer
+	
+	layers = sizes.shape[0]
+	m = X.shape[1]
+
+	if loss=="sq" :
+		grads["dH"+str(layers-1)] = (Y_hat-Y)/m # The loss is the avreage loss and hence we include the <m> variable
+		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)/m
+	elif loss=="ce" :
+		grads["dH"+str(layers-1)] = -Y / Y_hat
+		grads["dA"+str(layers-1)] = -(Y-Y_hat)
+	
+	# We have now obtained the gradients at the output layer. We just need to backpropagate through the network to find the gradients of the loss w.r.t the parameters
+
+	for i in range(layers-2,0,-1) :
+		back_layer(i,cache,grads,theta,activation)
+	
+	# All of the gradients of the loss w.r.t the parameters have been added to the grads dictionary
+	# Need to update the parameters after this
+	return grads
+
+def optimize(theta,grads,algo) :
+	# Function to perform a certain optimization algorithm with the dictionary of gradients given
+	# Parameters - theta - The dictionary of weights and biases which need to be updated
+	#		grads - The dictionary of gradients which will be used to update the parameters 
+	#		algo - Type of optimization to be used(gradient descent, rmsprop, etc.)
+	if algo == "gd" :
+	elif algo == "momentum" :
+	elif algo == "nag" :
+	elif algo == "adam" :
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
@@ -156,6 +196,7 @@ Y = np.array([[1,0,0],[0,1,1]])
 #W = params["W1"]
 #b = params["b1"]
 cache = {}
+cache["H0"] = X
 grads = {}
 Y_hat = feed_forward(X,"sigmoid",params,sizes,cache)
 error = cost(Y,Y_hat,"ce")
