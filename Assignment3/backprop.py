@@ -174,15 +174,33 @@ def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
 	# Need to update the parameters after this
 	return grads
 
-def optimize(theta,grads,algo) :
+def optimize(theta,grads,update,learning_rate,momentum,algo) :
 	# Function to perform a certain optimization algorithm with the dictionary of gradients given
 	# Parameters - theta - The dictionary of weights and biases which need to be updated
 	#		grads - The dictionary of gradients which will be used to update the parameters 
+	#		update - A dictionary containing the update values at instant <t-1> for the momentum based algorithm
+	#		learning_rate - Rate to be used by the gradient descent algorithm; gradients will be scaled by this factor
+	#		momentum - The momentum parameter for a momentum based algorithm
 	#		algo - Type of optimization to be used(gradient descent, rmsprop, etc.)
+	L = len(theta)/2 # Number of layers in the network excluding the input layer
 	if algo == "gd" :
+		for i in range(1,L+1) :
+			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*grads["dW"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*grads["db"+str(i)]
 	elif algo == "momentum" :
+		for i in range(1,L+1) :
+			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)]
+			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
+			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
 	elif algo == "nag" :
+		for i in range(1,L+1) :
+			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
+			update["b"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["db"+str(i)]
+			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
+		i = 1
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
