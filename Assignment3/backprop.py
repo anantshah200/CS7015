@@ -32,13 +32,20 @@ def initialize_parameters(num_hidden,sizes) :
 	
 	return theta
 
-def create_mini_batch(X, Y, batch_size) :
+def initialize_updates(update,sizes) :
+	# Function to initialize the update matrices to 0
+	# Parameters -  updates - A dictionary which contains the history of updates for each parameter
+	#		sizes - The size of each layer in the network
+	num_layers = sizes.shape[0]
+	for i in range(1,num_layers) :
+		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]))
+		update["b"+str(i)] = np.zeros((sizes[i],1))
+
+def create_mini_batch(N, batch_size) :
 	# Function to obtain randomized batch indices for the mini-batch optimization algorithm
-	# Parameters -  X - input data
-	#		Y - output data
+	# Parameters -  N - number of training examples
 	#		batch_size - The size of a batch(has to be a multiple of 5)
 
-	N = X.shpape[1]
 	indices = np.random.permutation(N)
 	mini_batch_indices = [] # A list containing each set of indices
 	for i in range(int(N/batch_size)) :
@@ -209,7 +216,7 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 	elif algo == "nag" :
 		for i in range(1,L+1) :
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
-			update["b"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["db"+str(i)]
+			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
@@ -232,22 +239,34 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 	N = X.shape[1] # Number of training examples
 	num_hidden = sizes.shape[0] - 2
 
-	if (batch_size%5!=0 && batch_size!=1) :
+	if (batch_size%5!=0 and batch_size!=1) :
 		print("error : Invalid batch size - should be a multiple of 5 or 1")
 		sys.exit()
 
 	num_batches = N/batch_size
-
-	batch_indices = create_mini_batch(X, Y, batch_size)
 
 	# First initialize the parameters
 	theta = initialize_parameters(num_hidden,sizes)
 	cache = {} # Initialize an empty dictionary : To store the pre-activations and activations obtained in the forawrd pass
 	grads = {} # Initialize an empty dictionary : To store the gradients of the loss w.r.t the parameters of the network
 	update = {} # A dictionary containing the history of the directions in which the parameters were forced to go
+	
+	initialize_updates(update,sizes) # Initialize all the updates to 0
 
 	for i in range(epochs) :
-		
+		batch_indices = create_mini_batch(N,batch_size)
+		for indices in batch_indices :
+			X_batch = X[:,batch_indices]
+			Y_batch = Y[:,batch_indices]
+			cache["H0"] = X_batch
+			Y_hat = feed_forward(X_batch,theta,activation,sizes,cache)
+			error = cost(Y_batch,Y_hat,loss)
+			grads = back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes)
+			optimize(theta,grads,update,learning_rate,momentum,algo)
+
+	# Need to calculate the accuracy on the cross validation set and the test set
+
+	print("Training complete")
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
@@ -268,3 +287,6 @@ error = cost(Y,Y_hat,"ce")
 print("True Output :" + str(Y))
 print("Predicted Probabilities : "+str(Y_hat))
 print("Cost : " + str(error))
+#update = {}
+#initialize_updates(update,sizes)
+#print("Update :"+str(update["W4"]))
