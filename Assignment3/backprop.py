@@ -32,6 +32,19 @@ def initialize_parameters(num_hidden,sizes) :
 	
 	return theta
 
+def create_mini_batch(X, Y, batch_size) :
+	# Function to obtain randomized batch indices for the mini-batch optimization algorithm
+	# Parameters -  X - input data
+	#		Y - output data
+	#		batch_size - The size of a batch(has to be a multiple of 5)
+
+	N = X.shpape[1]
+	indices = np.random.permutation(N)
+	mini_batch_indices = [] # A list containing each set of indices
+	for i in range(int(N/batch_size)) :
+		mini_batch_indices.append(indices[i*batch_size:(i+1)*batch_size])
+	return mini_batch_indices
+
 def sigmoid(A) :
 	# Implement the logistic function
 	return 1.0/(1.0 + np.exp(-A))
@@ -201,6 +214,40 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
 		i = 1
+
+def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epcohs, anneal) :
+	# Function to train the model to identify classes in the dataset
+	# Parameters -  X - input data
+	#		Y - the actual classes
+	#		sizes - A list consisting of the sizes of each layer in the network
+	#		learning_rate - The learning-rate for the gradient descent optimization algorithm
+	#		momentum - The momentum used for a momentum based optimization algorithm
+	# 		activstion - The type of activation in the neural network
+	#		loss - The type of loss function used
+	#		algo - The optimization algorithm used
+	#		batch_size - Batch size for batch optimization
+	#		epochs - NUmber of iterations for which we train the model
+	#		anneal - Anneal if true
+
+	N = X.shape[1] # Number of training examples
+	num_hidden = sizes.shape[0] - 2
+
+	if (batch_size%5!=0 && batch_size!=1) :
+		print("error : Invalid batch size - should be a multiple of 5 or 1")
+		sys.exit()
+
+	num_batches = N/batch_size
+
+	batch_indices = create_mini_batch(X, Y, batch_size)
+
+	# First initialize the parameters
+	theta = initialize_parameters(num_hidden,sizes)
+	cache = {} # Initialize an empty dictionary : To store the pre-activations and activations obtained in the forawrd pass
+	grads = {} # Initialize an empty dictionary : To store the gradients of the loss w.r.t the parameters of the network
+	update = {} # A dictionary containing the history of the directions in which the parameters were forced to go
+
+	for i in range(epochs) :
+		
 
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
