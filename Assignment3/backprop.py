@@ -17,7 +17,19 @@ def get_specs() :
 	parser.add_argument("--num_hidden",type=int,help="number of hidden layers in the neural network")
 	parser.add_argument("--sizes",nargs="?")
 	parser.add_argument("--activation",help="type of activation function in the layers")
+	parser.add_argument("--loss",help="type of loss at the output layer")
+	parser.add_argument("--opt",help="type of optimization algorithm")
+	parser.add_argument("--batch_size",type=int,help="size of each mini-batch")
+	parser.add_argument("--epochs",type=int,help="number of time steps for which we train our model")
+	parser.add_argument("--anneal",help="set to either true or false")
+	parser.add_argument("--save_dir",help="the directory where pickled model should be saved")
+	parser.add_argument("--expt_dir",help="the directory in which the log files will be saved")
+	parser.add_argument("--train",help="path to the training dataset")
+	parser.add_argument("--val",help="path to the validation dataset")
+	parser.add_argument("--test",help="path to the test dataset")
 
+	args = parser.parse_args()
+	return args
 
 def initialize_parameters(num_hidden,sizes) :
 	# Function to randomly initialize the parameters 
@@ -268,6 +280,28 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 	print("Training complete")
 
+# Assign variables to the parameters from the command line input
+args = get_specs()
+learning_rate = args.lr
+momentum = args.momentum
+num_hidden = args.num_hidden
+hidden_sizes = args.sizes
+
+sizes = []
+sizes.append(784)
+for num in hidden_sizes.split(',') :
+	sizes.append(int(num))
+sizes.append(10)
+sizes = np.array(sizes)
+
+activation = args.activation
+loss = args.loss
+algo = args.opt
+batch_size = args.batch_size
+epochs = args.epochs
+anneal = args.anneal
+
+print("Specs : "+str(args.sizes))
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
 print(sizes.shape[0])
