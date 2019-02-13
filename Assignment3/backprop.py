@@ -117,7 +117,6 @@ def feed_forward(X,activation,theta,sizes,cache) :
 	N = X.shape[1] # Number of training examples
 	layers = sizes.shape[0] # Total number of layers = hidden_layers + input_layer + output_layer
 	H_prev = X
-	print(H_prev.shape)
 
 	for i in range(1,layers-1) :
 		W = theta["W"+str(i)]
@@ -281,7 +280,9 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 			error = cost(Y_batch,Y_hat,loss)
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,grads,theta,activation,sizes)
 			optimize(theta,grads,update,learning_rate,momentum,algo)
-
+		
+		if (i % 100 ==0) :
+			print("Cost :"+str(error))
 	# Need to calculate the accuracy on the cross validation set and the test set
 
 	print("Training complete")
@@ -293,16 +294,16 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 	trash["H0"] = X_test
 	Y_hat = feed_forward(X_test,activation,theta,sizes,trash)
 	N = X_test.shape[1]
-	
+
 	for i in range(N) :
-		max_ind = np.where(Y_hat[:][i] == np.amax(Y_hat[:][i]))
-		min_ind = np.where(Y_hat[:][i] != np.amax(Y_hat[:][i]))
+		max_ind = np.where(Y_hat[:,i] == np.amax(Y_hat[:,i]))
+		min_ind = np.where(Y_hat[:,i] != np.amax(Y_hat[:,i]))
 		if(len(max_ind) >= 2) :
 			max_ind = max_ind[0]
-			for j in range(1,max_ind.size) :
+			for j in range(1,len(max_ind)) :
 				min_ind.append(max_ind[j])
-		Y_hat[max_ind][i] = 1
-		Y_hat[min_ind][i] = 0
+		Y_hat[max_ind,i] = 1
+		Y_hat[min_ind,i] = 0
 	corr = np.sum(Y_test*Y_hat)
 	accuracy = corr*100.0/N
 	return accuracy
