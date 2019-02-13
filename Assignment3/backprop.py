@@ -232,7 +232,7 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
-		i = 1
+		i = "1"
 
 def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epcohs, anneal) :
 	# Function to train the model to identify classes in the dataset
@@ -280,6 +280,56 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 	print("Training complete")
 
+def synthetic_data() :
+	# Function to test the program on synthetic data
+	n = 5
+	mu = 3.0
+	sigma = 0.5
+
+	mod0 = sigma*np.random.randn(2,n) + np.array([mu,0.0]).reshape((2,1))
+	label0 = np.zeros((1,n)).astype(int)
+
+	mod1 = sigma*np.random.randn(2,n) + np.array([0.0,mu]).reshape((2,1))
+	label1 = (label0+1).astype(int)
+
+	mod2 = sigma*np.random.randn(2,n) + np.array([-mu,0.0]).reshape((2,1))
+	label2 = (label0+2).astype(int)
+	
+	mod3 = sigma*np.random.randn(2,n) + np.array([0.0,-mu]).reshape((2,1))
+	label3 = (label0+3).astype(int)
+
+	X = np.concatenate((mod0, mod1, mod2, mod3),axis=1)
+	Y = np.concatenate((label0, label1, label2, label3),axis=1)
+	Y_st = np.zeros((3,4*n)).astype(int)
+	Y = np.vstack((Y,Y_st))
+	index_0 = np.where(Y[0][:] == 0); index_n0 = np.where(Y[0][:] != 0)
+	index_1 = np.where(Y[0][:] == 1)
+	index_2 = np.where(Y[0][:] == 2)
+	index_3 = np.where(Y[0][:] == 3)
+	Y[0][index_n0] = 0
+	Y[0][index_0] = 1
+	Y[1][index_1] = 1
+	Y[2][index_2] = 1
+	Y[3][index_3] = 1
+	
+	assert X.shape == (2,4*n)
+	assert Y.shape == (4,4*n)
+
+	indices = np.arange(4*n)
+	np.random.shuffle(indices)
+
+	X_train = X[:,indices[:3*n]]
+	Y_train = Y[:,indices[:3*n]]
+
+	X_val = X[:,indices[3*n:int(3.5*n)]]
+	Y_val = Y[:,indices[3*n:int(3.5*n)]]
+
+	X_test = X[:,indices[int(3.5*n):]]
+	Y_test = Y[:,indices[int(3.5*n):]]
+
+	data = {"X_train" : X_train,"Y_train" :  Y_train,"X_val" :  X_val,"Y_val" :  Y_val,"X_test" :  X_test,"Y_test" :  Y_test}
+	return data
+
 # Assign variables to the parameters from the command line input
 args = get_specs()
 learning_rate = args.lr
@@ -301,6 +351,8 @@ batch_size = args.batch_size
 epochs = args.epochs
 anneal = args.anneal
 
+data = synthetic_data()
+
 print("Specs : "+str(args.sizes))
 num_hidden = 3
 sizes = np.array([4,3,5,2,2])
@@ -321,6 +373,3 @@ error = cost(Y,Y_hat,"ce")
 print("True Output :" + str(Y))
 print("Predicted Probabilities : "+str(Y_hat))
 print("Cost : " + str(error))
-#update = {}
-#initialize_updates(update,sizes)
-#print("Update :"+str(update["W4"]))
