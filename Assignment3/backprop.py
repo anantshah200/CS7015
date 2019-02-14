@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 import sys
 import pickle
 import argparse
+import pandas as pd
+
+NUM_FEATURES = 784
+NUM_CLASSES = 10
 
 def get_specs() :
 	"Function to get the specifications from the command line arguments"
@@ -305,6 +309,7 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 		Y_hat[max_ind,i] = 1
 		Y_hat[min_ind,i] = 0
 	corr = np.sum(Y_test*Y_hat)
+	print(Y_hat)
 	accuracy = corr*100.0/N
 	return accuracy
 
@@ -358,6 +363,26 @@ def synthetic_data() :
 	data = {"X_train" : X_train,"Y_train" :  Y_train,"X_val" :  X_val,"Y_val" :  Y_val,"X_test" :  X_test,"Y_test" :  Y_test}
 	return data
 
+def get_data(train_path,val_path,test_path) :
+	# Function to get the data for training
+	train_data = pd.read_csv(train_path)
+	val_data = pd.read_csv(val_path)
+	test_data = pd.read_csv(test_path)
+	train = np.array(train_data)
+	val = np.array(val_data)
+	test = np.array(test_data)
+	X_train = train[:,1:NUM_FEATURES+1].T
+	assert X_train.shape == (NUM_FEATURES,train.shape[0])
+	Y_train = train[:,NUM_FEATURES+1].T
+	assert Y_train.shape == (1,train.shape[0])
+	X_val = val[:,1:NUM_FEATURES+1].T
+	assert X_val.shape == (NUM_FEATURES,val.shape[0])
+	Y_val = val[:,NUM_FEATURES+1].T
+	assert Y_val.shape == (1,val.shape[0])
+	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val}
+
+	return data
+
 # Assign variables to the parameters from the command line input
 args = get_specs()
 learning_rate = args.lr
@@ -378,21 +403,27 @@ algo = args.opt
 batch_size = args.batch_size
 epochs = args.epochs
 anneal = args.anneal
+train_path = args.train
+val_path = args.val
+test_path = args.test
 
-data = synthetic_data()
-X_train = data["X_train"]
-Y_train = data["Y_train"]
-X_val = data["X_val"]
-Y_val = data["Y_val"]
-X_test = data["X_test"]
-Y_test = data["Y_test"]
+data = get_data(train_path, val_path, test_path)
+train_data = data["train"]
+#Y_train = data["Y_train"]
+#X_val = data["X_val"]
+#Y_val = data["Y_val"]
+#X_test = data["X_test"]
+#Y_test = data["Y_test"]
+val_data = data["val"]
+test_data = data["test"]
+print(train_data.shape)
+print(val_data.shape)
+print(test_data.shape)
 
-print(X_test.shape)
-
-theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
-print(theta)
-accuracy = test_accuracy(X_test,Y_test,theta,activation,sizes)
-print("Accuracy :"+str(accuracy))
+#theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
+#print(theta)
+#accuracy = test_accuracy(X_test,Y_test,theta,activation,sizes)
+#print("Accuracy :"+str(accuracy))
 #print("Specs : "+str(args.sizes))
 #num_hidden = 3
 #sizes = np.array([4,3,5,2,2])
