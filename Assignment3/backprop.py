@@ -82,7 +82,9 @@ def softmax(A) :
 	n = A.shape[1]
 	A_exp = np.exp(A) # Found the exponential of all the values
 	e_sum = np.sum(A_exp,axis=0)
+	#print("e_sum :"+str(e_sum))
 	A_softmax = A_exp/e_sum
+#	print(A_softmax)
 	assert A_softmax.shape == (m,n)
 	return A_softmax
 
@@ -140,15 +142,15 @@ def feed_forward(X,activation,theta,sizes,cache) :
 def cost(Y,Y_hat,loss) :
 	# Function to calculate the error in prediction by the neural network
 	# Parameters :  Y - Actual labels for the data
-	#			Y_hat - Predicted probabilities of the labels
+	#		Y_hat - Predicted probabilities of the labels
 	#		loss - The type of loss (either square error or entropy)
 	assert Y.shape == Y_hat.shape
-	m = Y.shape[1]
+	N = Y.shape[1]
 	if (loss == "sq") :
-		error = np.sum((Y-Y_hat)**2)/(2*m)
+		error = np.sum((Y-Y_hat)**2)/(2*N)
 	elif (loss == "ce") :
 		error = -np.sum((Y*np.log(Y_hat)))
-	return error 
+	return error
 
 def back_layer(layer,cache,grads,theta,activation) :
 	# Function to compute the gradient of the loss with respect to the pre-activation of a layer
@@ -285,8 +287,7 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,grads,theta,activation,sizes)
 			optimize(theta,grads,update,learning_rate,momentum,algo)
 		
-		if (i % 100 ==0) :
-			print("Cost :"+str(error))
+		print("Cost :"+str(error))
 	# Need to calculate the accuracy on the cross validation set and the test set
 
 	print("Training complete")
@@ -298,18 +299,21 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 	trash["H0"] = X_test
 	Y_hat = feed_forward(X_test,activation,theta,sizes,trash)
 	N = X_test.shape[1]
+	max_val = 0
 
 	for i in range(N) :
 		max_ind = np.where(Y_hat[:,i] == np.amax(Y_hat[:,i]))
 		min_ind = np.where(Y_hat[:,i] != np.amax(Y_hat[:,i]))
-		if(len(max_ind) >= 2) :
-			max_ind = max_ind[0]
-			for j in range(1,len(max_ind)) :
-				min_ind.append(max_ind[j])
-		Y_hat[max_ind,i] = 1
+		if(len(max_ind[0]) >= 2) :
+			max_val = max_ind[0][0]
+#			for j in range(1,len(max_ind[0])) :
+			min_ind = np.append(min_ind[0],max_ind[0][1:])
+		else :
+			max_val = max_ind[0]
+		Y_hat[max_val,i] = 1
 		Y_hat[min_ind,i] = 0
 	corr = np.sum(Y_test*Y_hat)
-	print(Y_hat)
+	print(N)
 	accuracy = corr*100.0/N
 	return accuracy
 
@@ -371,15 +375,33 @@ def get_data(train_path,val_path,test_path) :
 	train = np.array(train_data)
 	val = np.array(val_data)
 	test = np.array(test_data)
+
 	X_train = train[:,1:NUM_FEATURES+1].T
 	assert X_train.shape == (NUM_FEATURES,train.shape[0])
-	Y_train = train[:,NUM_FEATURES+1].T
-	assert Y_train.shape == (1,train.shape[0])
+
+	Y_train = train[:,NUM_FEATURES+1,None].T
+	Y_st = np.zeros((NUM_CLASSES-1,Y_train.shape[1])).astype(int)
+	Y_train = np.vstack((Y_train,Y_st))
+	for i in range(NUM_CLASSES) :
+		Y_train[i][np.where(Y_train[0][:] == int(i))] = 1
+		Y_train[i][np.where(Y_train[0][:] != int(i))] = 0
+	assert Y_train.shape == (NUM_CLASSES,train.shape[0])
+
 	X_val = val[:,1:NUM_FEATURES+1].T
 	assert X_val.shape == (NUM_FEATURES,val.shape[0])
-	Y_val = val[:,NUM_FEATURES+1].T
-	assert Y_val.shape == (1,val.shape[0])
-	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val}
+
+	Y_val = val[:,NUM_FEATURES+1,None].T
+	Y_st = np.zeros((NUM_CLASSES-1,val.shape[0])).astype(int)
+	Y_val = np.vstack((Y_val,Y_st))
+	for i in range(NUM_CLASSES) :
+		Y_val[i][np.where(Y_val[0][:] == int(i))] == 1
+		Y_val[i][np.where(Y_val[0][:] != int(i))] == 0
+	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
+
+	X_test = test[:,1:NUM_FEATURES+1].T
+	assert X_test.shape == (NUM_FEATURES,test.shape[0])
+
+	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
 
 	return data
 
@@ -391,10 +413,10 @@ num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
 sizes = []
-sizes.append(2)
+sizes.append(NUM_FEATURES)
 for num in hidden_sizes.split(',') :
 	sizes.append(int(num))
-sizes.append(4)
+sizes.append(NUM_CLASSES)
 sizes = np.array(sizes)
 
 activation = args.activation
@@ -408,39 +430,12 @@ val_path = args.val
 test_path = args.test
 
 data = get_data(train_path, val_path, test_path)
-train_data = data["train"]
-#Y_train = data["Y_train"]
-#X_val = data["X_val"]
-#Y_val = data["Y_val"]
-#X_test = data["X_test"]
-#Y_test = data["Y_test"]
-val_data = data["val"]
-test_data = data["test"]
-print(train_data.shape)
-print(val_data.shape)
-print(test_data.shape)
-
-#theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
-#print(theta)
-#accuracy = test_accuracy(X_test,Y_test,theta,activation,sizes)
-#print("Accuracy :"+str(accuracy))
-#print("Specs : "+str(args.sizes))
-#num_hidden = 3
-#sizes = np.array([4,3,5,2,2])
-#print(sizes.shape[0])
-#params = initialize_parameters(num_hidden,sizes)
-#print("W1 : "+str(params["W1"]))
-#print("W4 : "+str(params["W4"]))
-#print("b1 : "+str(params["b1"]))
-#X = np.array([[-3.34,-2.12,1.56],[0.89,2.12,0.45],[0.21,-1.98,1.56],[-0.12,0.12,1.15]])
-#Y = np.array([[1,0,0],[0,1,1]])
-#W = params["W1"]
-#b = params["b1"]
-#cache = {}
-#cache["H0"] = X
-#grads = {}
-#Y_hat = feed_forward(X,"sigmoid",params,sizes,cache)
-#error = cost(Y,Y_hat,"ce")
-#print("True Output :" + str(Y))
-#print("Predicted Probabilities : "+str(Y_hat))
-#print("Cost : " + str(error))
+X_train = data["X_train"]
+Y_train = data["Y_train"]
+X_val = data["X_val"]
+Y_val = data["Y_val"]
+X_test = data["X_test"]
+theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
+print(theta)
+accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
+print("Accuracy :"+str(accuracy))
