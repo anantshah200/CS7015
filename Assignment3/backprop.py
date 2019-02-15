@@ -40,7 +40,7 @@ def initialize_parameters(num_hidden,sizes) :
 	# Parameters : num_hidden - Number of hidden layers  
 	#	       sizes - a list with number of perceptrons in each hidden layer including the input layer and output layer
 
-	np.random.seed(1234)
+	#np.random.seed(1234)
 	theta = {}
 	for i in range(1,num_hidden+2) :
 		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
@@ -193,7 +193,7 @@ def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
 	
 	# First, we need to calculate the derivative of the loss function w.r.t the output layer
 	
-	layers = sizes.shape[0]
+	layers = int(sizes.shape[0])
 	N = X.shape[1]
 
 	if loss=="sq" :
@@ -211,7 +211,7 @@ def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
 	# We have now obtained the gradients at the output layer. We just need to backpropagate through the network to find the gradients of the loss w.r.t the parameters
 
 	for i in range(layers-2,0,-1) :
-		back_layer(i,cache,grads,theta,activation)
+		back_layer(int(i),cache,grads,theta,activation)
 	
 	# All of the gradients of the loss w.r.t the parameters have been added to the grads dictionary
 	# Need to update the parameters after this
@@ -383,8 +383,8 @@ def get_data(train_path,val_path,test_path) :
 	Y_st = np.zeros((NUM_CLASSES-1,Y_train.shape[1])).astype(int)
 	Y_train = np.vstack((Y_train,Y_st))
 	for i in range(NUM_CLASSES) :
-		Y_train[i][np.where(Y_train[0][:] == int(i))] = 1
-		Y_train[i][np.where(Y_train[0][:] != int(i))] = 0
+		Y_train[i,np.where(Y_train[0][:] == int(i))] = 1
+	Y_train[0,np.where(Y_train[0][:] != 0)] = 0
 	assert Y_train.shape == (NUM_CLASSES,train.shape[0])
 
 	X_val = val[:,1:NUM_FEATURES+1].T
@@ -394,8 +394,8 @@ def get_data(train_path,val_path,test_path) :
 	Y_st = np.zeros((NUM_CLASSES-1,val.shape[0])).astype(int)
 	Y_val = np.vstack((Y_val,Y_st))
 	for i in range(NUM_CLASSES) :
-		Y_val[i][np.where(Y_val[0][:] == int(i))] == 1
-		Y_val[i][np.where(Y_val[0][:] != int(i))] == 0
+		Y_val[i,np.where(Y_val[0][:] == int(i))] = 1
+	Y_val[0,np.where(Y_val[0][:] != 0)] = 0
 	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
 
 	X_test = test[:,1:NUM_FEATURES+1].T
@@ -435,7 +435,7 @@ Y_train = data["Y_train"]
 X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
-theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
-print(theta)
-accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
-print("Accuracy :"+str(accuracy))
+#theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
+#print(theta)
+#accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
+#print("Accuracy :"+str(accuracy))
