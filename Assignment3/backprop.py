@@ -10,6 +10,7 @@ import sys
 import pickle
 import argparse
 import pandas as pd
+import scipy as sp
 
 NUM_FEATURES = 784
 NUM_CLASSES = 10
