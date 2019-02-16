@@ -3,6 +3,7 @@
 # Author ; Anant Shah
 # E-Mail : anantshah200@gmail.com
 
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -48,14 +49,16 @@ def initialize_parameters(num_hidden,sizes) :
 	
 	return theta
 
-def initialize_updates(update,sizes) :
+def initialize_updates(sizes) :
 	# Function to initialize the update matrices to 0
 	# Parameters -  updates - A dictionary which contains the history of updates for each parameter
 	#		sizes - The size of each layer in the network
+	update = {}
 	num_layers = sizes.shape[0]
 	for i in range(1,num_layers) :
 		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]))
 		update["b"+str(i)] = np.zeros((sizes[i],1))
+	return update
 
 def create_mini_batch(N, batch_size) :
 	# Function to obtain randomized batch indices for the mini-batch optimization algorithm
@@ -110,9 +113,9 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 		cache["H"+str(layer)] = H
 
 	assert H.shape == (W.shape[0],N)
-	return H
+	return H, cache
 
-def feed_forward(X,activation,theta,sizes,cache) :
+def feed_forward(X,activation,theta,sizes) :
 	# Function to implement the forward pass throughout the whole network
 	# Parameters :  X - Input Data
 	#		activation - The type of activation in the hidden layers
@@ -123,11 +126,13 @@ def feed_forward(X,activation,theta,sizes,cache) :
 	N = X.shape[1] # Number of training examples
 	layers = sizes.shape[0] # Total number of layers = hidden_layers + input_layer + output_layer
 	H_prev = X
+	cache = {}
+	cache["H0"] = X
 
 	for i in range(1,layers-1) :
 		W = theta["W"+str(i)]
 		b = theta["b"+str(i)]
-		H = forward_layer(H_prev,activation,W,b,int(i),cache)
+		H, cache = forward_layer(H_prev,activation,W,b,int(i),cache)
 		H_prev = H
 	
 	# The last layer has a softmax function hence we need to perform the computation separately
@@ -137,7 +142,7 @@ def feed_forward(X,activation,theta,sizes,cache) :
 	cache["A"+str(layers-1)] = A
 	Y_hat = softmax(A)
 	assert Y_hat.shape == (sizes[layers-1],N)
-	return Y_hat
+	return Y_hat, cache
 
 def cost(Y,Y_hat,loss) :
 	# Function to calculate the error in prediction by the neural network
@@ -149,7 +154,7 @@ def cost(Y,Y_hat,loss) :
 	if (loss == "sq") :
 		error = np.sum((Y-Y_hat)**2)/(2*N)
 	elif (loss == "ce") :
-		error = -np.sum((Y*np.log(Y_hat)))
+		error = -np.sum(np.multiply(Y,np.log(Y_hat)))/N
 	return error
 
 def back_layer(layer,cache,grads,theta,activation) :
@@ -166,9 +171,9 @@ def back_layer(layer,cache,grads,theta,activation) :
 	W = theta["W"+str(layer)]
 	# We will be using the chain rule. It will lead to a point-wise multiplication as there is only 1 path from the pre-activation to the post-activation of a layer
 	if activation=="tanh" :
-		dA = dH * (1-tanh(A)**2)
+		dA = np.multiply(dH,(1-tanh(A)**2))
 	elif activation=="sigmoid" :
-		dA = dH * sigmoid(A) * (1-sigmoid(A))
+		dA = np.multiply(dH,np.multiply(sigmoid(A),(1-sigmoid(A))))
 	
 	dW = np.dot(dA,H_prev.T)
 	db = np.sum(dA,axis=1,keepdims=True)
@@ -177,8 +182,9 @@ def back_layer(layer,cache,grads,theta,activation) :
 	grads["dW"+str(layer)] = dW
 	grads["db"+str(layer)] = db
 	grads["dH"+str(layer-1)] = dH_prev
+	return grads
 
-def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
+def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	# Function to backpropagate through the network to update the weights
 	# Parameters -  X - The input data
 	#		Y - The output data
@@ -195,13 +201,14 @@ def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
 	
 	layers = int(sizes.shape[0])
 	N = X.shape[1]
+	grads = {}
 
 	if loss=="sq" :
 		grads["dH"+str(layers-1)] = (Y_hat-Y)/N # The loss is the avreage loss and hence we include the <m> variable
 		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)/N
 	elif loss=="ce" :
-		grads["dH"+str(layers-1)] = -Y / Y_hat
-		grads["dA"+str(layers-1)] = -(Y-Y_hat)
+		grads["dH"+str(layers-1)] = -(Y / (N*Y_hat))
+		grads["dA"+str(layers-1)] = -(Y-Y_hat)/N
 	
 	H_prev = cache["H"+str(layers-2)]
 	dA = grads["dA"+str(layers-1)]
@@ -211,7 +218,7 @@ def back_prop(X,Y,Y_hat,loss,cache,grads,theta,activation,sizes) :
 	# We have now obtained the gradients at the output layer. We just need to backpropagate through the network to find the gradients of the loss w.r.t the parameters
 
 	for i in range(layers-2,0,-1) :
-		back_layer(int(i),cache,grads,theta,activation)
+		grads = back_layer(int(i),cache,grads,theta,activation)
 	
 	# All of the gradients of the loss w.r.t the parameters have been added to the grads dictionary
 	# Need to update the parameters after this
@@ -244,6 +251,7 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
 		i = "1"
+	return theta, update
 
 def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epcohs, anneal) :
 	# Function to train the model to identify classes in the dataset
@@ -270,24 +278,20 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 	# First initialize the parameters
 	theta = initialize_parameters(num_hidden,sizes)
-	cache = {} # Initialize an empty dictionary : To store the pre-activations and activations obtained in the forawrd pass
-	grads = {} # Initialize an empty dictionary : To store the gradients of the loss w.r.t the parameters of the network
-	update = {} # A dictionary containing the history of the directions in which the parameters were forced to go
 	
-	initialize_updates(update,sizes) # Initialize all the updates to 0
+	update = initialize_updates(sizes) # Initialize all the updates to 0
 
 	for i in range(epochs) :
 		batch_indices = create_mini_batch(N,batch_size)
 		for indices in batch_indices :
 			X_batch = X[:,indices]
 			Y_batch = Y[:,indices]
-			cache["H0"] = X_batch
-			Y_hat = feed_forward(X_batch,activation,theta,sizes,cache)
+			Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
 			error = cost(Y_batch,Y_hat,loss)
-			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,grads,theta,activation,sizes)
-			optimize(theta,grads,update,learning_rate,momentum,algo)
-		
-		print("Cost :"+str(error))
+			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes)
+			theta, update = optimize(theta,grads,update,learning_rate,momentum,algo)
+		if i%100 == 0 :
+			print("Cost :"+str(error))
 	# Need to calculate the accuracy on the cross validation set and the test set
 
 	print("Training complete")
@@ -295,9 +299,7 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 	# Function to test the accuracy of the trained model
-	trash = {}
-	trash["H0"] = X_test
-	Y_hat = feed_forward(X_test,activation,theta,sizes,trash)
+	Y_hat, trash = feed_forward(X_test,activation,theta,sizes)
 	N = X_test.shape[1]
 	max_val = 0
 
@@ -306,7 +308,6 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 		min_ind = np.where(Y_hat[:,i] != np.amax(Y_hat[:,i]))
 		if(len(max_ind[0]) >= 2) :
 			max_val = max_ind[0][0]
-#			for j in range(1,len(max_ind[0])) :
 			min_ind = np.append(min_ind[0],max_ind[0][1:])
 		else :
 			max_val = max_ind[0]
@@ -435,7 +436,7 @@ Y_train = data["Y_train"]
 X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
-#theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
-#print(theta)
-#accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
-#print("Accuracy :"+str(accuracy))
+theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
+print(theta)
+accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
+print("Accuracy :"+str(accuracy))
