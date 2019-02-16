@@ -84,10 +84,8 @@ def softmax(A) :
 	m = A.shape[0]
 	n = A.shape[1]
 	A_exp = np.exp(A) # Found the exponential of all the values
-	e_sum = np.sum(A_exp,axis=0)
-	#print("e_sum :"+str(e_sum))
+	e_sum = np.sum(A_exp,axis=0,keepdims=True)
 	A_softmax = A_exp/e_sum
-#	print(A_softmax)
 	assert A_softmax.shape == (m,n)
 	return A_softmax
 
@@ -102,6 +100,7 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 
 	N = H_prev.shape[1] # Number of training examples
 	assert H_prev.shape[0] == W.shape[1]
+	assert b.shape == (W.shape[0],1)
 
 	A = np.dot(W,H_prev)+b
 	cache["A"+str(layer)] = A
@@ -207,7 +206,7 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 		grads["dH"+str(layers-1)] = (Y_hat-Y)/N # The loss is the avreage loss and hence we include the <m> variable
 		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)/N
 	elif loss=="ce" :
-		grads["dH"+str(layers-1)] = -(Y / (N*Y_hat))
+		grads["dH"+str(layers-1)] = -(1.0/N)*(Y / Y_hat)
 		grads["dA"+str(layers-1)] = -(Y-Y_hat)/N
 	
 	H_prev = cache["H"+str(layers-2)]
@@ -278,8 +277,8 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 	# First initialize the parameters
 	theta = initialize_parameters(num_hidden,sizes)
-	
 	update = initialize_updates(sizes) # Initialize all the updates to 0
+	costs = []
 
 	for i in range(epochs) :
 		batch_indices = create_mini_batch(N,batch_size)
@@ -290,10 +289,15 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 			error = cost(Y_batch,Y_hat,loss)
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes)
 			theta, update = optimize(theta,grads,update,learning_rate,momentum,algo)
-		if i%100 == 0 :
+		if i%10 == 0 :
 			print("Cost :"+str(error))
+			costs.append(error)
 	# Need to calculate the accuracy on the cross validation set and the test set
 
+	plt.plot(range(0,epochs,10),costs)
+	plt.xlabel("epoch")
+	plt.ylabel("cost")
+	plt.show()
 	print("Training complete")
 	return theta
 
@@ -313,59 +317,61 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 			max_val = max_ind[0]
 		Y_hat[max_val,i] = 1
 		Y_hat[min_ind,i] = 0
+	print(np.sum(Y_hat))
+	print(Y_hat.shape[1])
 	corr = np.sum(Y_test*Y_hat)
 	accuracy = corr*100.0/N
 	return accuracy
 
-def synthetic_data() :
-	# Function to test the program on synthetic data
-	n = 1000
-	mu = 3.0
-	sigma = 0.5
-
-	mod0 = sigma*np.random.randn(2,n) + np.array([mu,0.0]).reshape((2,1))
-	label0 = np.zeros((1,n)).astype(int)
-
-	mod1 = sigma*np.random.randn(2,n) + np.array([0.0,mu]).reshape((2,1))
-	label1 = (label0+1).astype(int)
-
-	mod2 = sigma*np.random.randn(2,n) + np.array([-mu,0.0]).reshape((2,1))
-	label2 = (label0+2).astype(int)
-	
-	mod3 = sigma*np.random.randn(2,n) + np.array([0.0,-mu]).reshape((2,1))
-	label3 = (label0+3).astype(int)
-
-	X = np.concatenate((mod0, mod1, mod2, mod3),axis=1)
-	Y = np.concatenate((label0, label1, label2, label3),axis=1)
-	Y_st = np.zeros((3,4*n)).astype(int)
-	Y = np.vstack((Y,Y_st))
-	index_0 = np.where(Y[0][:] == 0); index_n0 = np.where(Y[0][:] != 0)
-	index_1 = np.where(Y[0][:] == 1)
-	index_2 = np.where(Y[0][:] == 2)
-	index_3 = np.where(Y[0][:] == 3)
-	Y[0][index_n0] = 0
-	Y[0][index_0] = 1
-	Y[1][index_1] = 1
-	Y[2][index_2] = 1
-	Y[3][index_3] = 1
-	
-	assert X.shape == (2,4*n)
-	assert Y.shape == (4,4*n)
-
-	indices = np.arange(4*n)
-	np.random.shuffle(indices)
-
-	X_train = X[:,indices[:3*n]]
-	Y_train = Y[:,indices[:3*n]]
-
-	X_val = X[:,indices[3*n:int(3.5*n)]]
-	Y_val = Y[:,indices[3*n:int(3.5*n)]]
-
-	X_test = X[:,indices[int(3.5*n):]]
-	Y_test = Y[:,indices[int(3.5*n):]]
-
-	data = {"X_train" : X_train,"Y_train" :  Y_train,"X_val" :  X_val,"Y_val" :  Y_val,"X_test" :  X_test,"Y_test" :  Y_test}
-	return data
+#def synthetic_data() :
+#	# Function to test the program on synthetic data
+#	n = 1000
+#	mu = 3.0
+#	sigma = 0.5
+#
+#	mod0 = sigma*np.random.randn(2,n) + np.array([mu,0.0]).reshape((2,1))
+#	label0 = np.zeros((1,n)).astype(int)
+#
+#	mod1 = sigma*np.random.randn(2,n) + np.array([0.0,mu]).reshape((2,1))
+#	label1 = (label0+1).astype(int)
+#
+#	mod2 = sigma*np.random.randn(2,n) + np.array([-mu,0.0]).reshape((2,1))
+#	label2 = (label0+2).astype(int)
+#	
+#	mod3 = sigma*np.random.randn(2,n) + np.array([0.0,-mu]).reshape((2,1))
+#	label3 = (label0+3).astype(int)
+#
+#	X = np.concatenate((mod0, mod1, mod2, mod3),axis=1)
+#	Y = np.concatenate((label0, label1, label2, label3),axis=1)
+#	Y_st = np.zeros((3,4*n)).astype(int)
+#	Y = np.vstack((Y,Y_st))
+#	index_0 = np.where(Y[0][:] == 0); index_n0 = np.where(Y[0][:] != 0)
+#	index_1 = np.where(Y[0][:] == 1)
+#	index_2 = np.where(Y[0][:] == 2)
+#	index_3 = np.where(Y[0][:] == 3)
+#	Y[0][index_n0] = 0
+#	Y[0][index_0] = 1
+#	Y[1][index_1] = 1
+#	Y[2][index_2] = 1
+#	Y[3][index_3] = 1
+#	
+#	assert X.shape == (2,4*n)
+#	assert Y.shape == (4,4*n)
+#
+#	indices = np.arange(4*n)
+#	np.random.shuffle(indices)
+#
+#	X_train = X[:,indices[:3*n]]
+#	Y_train = Y[:,indices[:3*n]]
+#
+#	X_val = X[:,indices[3*n:int(3.5*n)]]
+#	Y_val = Y[:,indices[3*n:int(3.5*n)]]
+#
+#	X_test = X[:,indices[int(3.5*n):]]
+#	Y_test = Y[:,indices[int(3.5*n):]]
+#
+#	data = {"X_train" : X_train,"Y_train" :  Y_train,"X_val" :  X_val,"Y_val" :  Y_val,"X_test" :  X_test,"Y_test" :  Y_test}
+#	return data
 
 def get_data(train_path,val_path,test_path) :
 	# Function to get the data for training
@@ -377,14 +383,17 @@ def get_data(train_path,val_path,test_path) :
 	test = np.array(test_data)
 
 	X_train = train[:,1:NUM_FEATURES+1].T
+
 	assert X_train.shape == (NUM_FEATURES,train.shape[0])
 
 	Y_train = train[:,NUM_FEATURES+1,None].T
-	Y_st = np.zeros((NUM_CLASSES-1,Y_train.shape[1])).astype(int)
+	Y_st = np.zeros((NUM_CLASSES-1,train.shape[0])).astype(int)
 	Y_train = np.vstack((Y_train,Y_st))
-	for i in range(NUM_CLASSES) :
+	init_index = np.where(Y_train[0,:] == 0)
+	for i in range(1,NUM_CLASSES) :
 		Y_train[i,np.where(Y_train[0][:] == int(i))] = 1
 	Y_train[0,np.where(Y_train[0][:] != 0)] = 0
+	Y_train[0,init_index] = 1
 	assert Y_train.shape == (NUM_CLASSES,train.shape[0])
 
 	X_val = val[:,1:NUM_FEATURES+1].T
@@ -393,9 +402,11 @@ def get_data(train_path,val_path,test_path) :
 	Y_val = val[:,NUM_FEATURES+1,None].T
 	Y_st = np.zeros((NUM_CLASSES-1,val.shape[0])).astype(int)
 	Y_val = np.vstack((Y_val,Y_st))
-	for i in range(NUM_CLASSES) :
+	init_val = np.where(Y_val[0,:] == 0)
+	for i in range(1,NUM_CLASSES) :
 		Y_val[i,np.where(Y_val[0][:] == int(i))] = 1
 	Y_val[0,np.where(Y_val[0][:] != 0)] = 0
+	Y_val[0,init_val] = 1
 	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
 
 	X_test = test[:,1:NUM_FEATURES+1].T
