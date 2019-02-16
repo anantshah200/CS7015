@@ -314,7 +314,6 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 		Y_hat[max_val,i] = 1
 		Y_hat[min_ind,i] = 0
 	corr = np.sum(Y_test*Y_hat)
-	print(N)
 	accuracy = corr*100.0/N
 	return accuracy
 
