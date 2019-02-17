@@ -347,7 +347,6 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	plt.xlabel("epoch")
 	plt.ylabel("cost")
 	plt.show()
-	#print("Training complete")
 	return theta
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
