@@ -225,7 +225,7 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	# Need to update the parameters after this
 	return grads
 
-def optimize(theta,grads,update,mom,time_step,learning_rate,momentum,algo) :
+def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momentum,algo) :
 	# Function to perform a certain optimization algorithm with the dictionary of gradients given
 	# Parameters - theta - The dictionary of weights and biases which need to be updated
 	#		grads - The dictionary of gradients which will be used to update the parameters 
@@ -258,16 +258,17 @@ def optimize(theta,grads,update,mom,time_step,learning_rate,momentum,algo) :
 		epsilon = 1e-8
 		for i in range(1,L+1) :
 			mom["W"+str(i)] = beta1*mom["W"+str(i)] + (1-beta1)*grads["dW"+str(i)]
-			mom["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
+			mom_t["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
+			#print("[W"+str(i)+"] : "+str(update["W"+str(i)]))
 			update["W"+str(i)] = beta2*update["W"+str(i)] + (1-beta2)*(grads["dW"+str(i)]**2)
-			update["W"+str(i)] = update["W"+str(i)] / (1 - beta2**time_step)
+			update_t["W"+str(i)] = update["W"+str(i)] / (1 - beta2**time_step)
 			mom["b"+str(i)] = beta1*mom["b"+str(i)] + (1-beta1)*grads["db"+str(i)]
-			mom["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
+			mom_t["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
 			update["b"+str(i)] = beta2*update["b"+str(i)] + (1-beta2)*(grads["db"+str(i)]**2)
-			update["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
-			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom["W"+str(i)] / (np.sqrt(update["W"+str(i)])+epsilon)
-			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom["b"+str(i)] / (np.sqrt(update["b"+str(i)])+epsilon)
-	return theta, update, mom
+			update_t["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
+			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom_t["W"+str(i)] / (np.sqrt(update_t["W"+str(i)])+epsilon)
+			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
+	return theta, update, mom, update_t, mom_t
 
 def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal) :
 	# Function to train the model to identify classes in the dataset
@@ -298,8 +299,12 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	theta = initialize_parameters(num_hidden,sizes)
 	update = {}
 	mom = {}
+	update_t = {}
+	mom_t = {}
 	update = initialize_updates(sizes,update) # Initialize all the updates to 0
+	update_t = initialize_updates(sizes,update_t)
 	mom = initialize_updates(sizes,mom)
+	mom_t = initialize_updates(sizes,mom_t)
 	costs = []
 	val_costs = []
 	time = 0
@@ -316,7 +321,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			error = cost(Y_batch,Y_hat,loss)
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes)
 			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
-			theta, update, mom = optimize(theta,grads,update,mom,time+1,learning_rate,momentum,algo)
+			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
 			time = time + 1
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
 		error_val = cost(Y_val,Y_val_hat,loss)
@@ -334,15 +339,15 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		else :
 			val_costs.append(error_val)
 			i = i + 1
-		if ep % 10 == 0 :
+		if ep % 1 == 0 :
 			costs.append(error)
-		if ep % 100 == 0 :
+		if ep % 10 == 0 :
 			print("Training error : Epoch : " + str(ep) + " " + str(error))
 			print("Validation Error : Epoch : " + str(ep) + " " + str(error_val))
 		ep = ep + 1
 		# Need to calculate the accuracy on the cross validation set and the test set
 
-	plt.plot(range(0,epochs,100),costs)
+	plt.plot(range(0,epochs),costs)
 	plt.plot(range(epochs),val_costs)
 	plt.xlabel("epoch")
 	plt.ylabel("cost")
@@ -441,6 +446,8 @@ Y_train = data["Y_train"]
 X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
+#u = {}
+#initialize_updates(sizes,u)
 theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
 print(theta)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
