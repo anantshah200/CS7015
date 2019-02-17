@@ -10,6 +10,7 @@ import sys
 import pickle
 import argparse
 import pandas as pd
+from sklearn.metrics import accuracy_score
 
 NUM_FEATURES = 784
 NUM_CLASSES = 10
@@ -41,23 +42,22 @@ def initialize_parameters(num_hidden,sizes) :
 	# Parameters : num_hidden - Number of hidden layers  
 	#	       sizes - a list with number of perceptrons in each hidden layer including the input layer and output layer
 
-	#np.random.seed(1234)
+	np.random.seed(1234)
 	theta = {}
 	for i in range(1,num_hidden+2) :
 		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
-		theta["b"+str(i)] = np.zeros((sizes[i],1))
+		theta["b"+str(i)] = np.zeros((sizes[i],1),dtype=np.float64)
 	
 	return theta
 
-def initialize_updates(sizes) :
+def initialize_updates(sizes,update) :
 	# Function to initialize the update matrices to 0
 	# Parameters -  updates - A dictionary which contains the history of updates for each parameter
 	#		sizes - The size of each layer in the network
-	update = {}
 	num_layers = sizes.shape[0]
 	for i in range(1,num_layers) :
-		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]))
-		update["b"+str(i)] = np.zeros((sizes[i],1))
+		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]),dtype=np.float64)
+		update["b"+str(i)] = np.zeros((sizes[i],1),dtype=np.float64)
 	return update
 
 def create_mini_batch(N, batch_size) :
@@ -153,7 +153,8 @@ def cost(Y,Y_hat,loss) :
 	if (loss == "sq") :
 		error = np.sum((Y-Y_hat)**2)/(2*N)
 	elif (loss == "ce") :
-		error = -np.sum(np.multiply(Y,np.log(Y_hat)))/N
+		error = -np.sum(np.multiply(Y,np.log(Y_hat))) / N
+	error = np.squeeze(error)
 	return error
 
 def back_layer(layer,cache,grads,theta,activation) :
@@ -165,6 +166,7 @@ def back_layer(layer,cache,grads,theta,activation) :
 	#		activation - The type of activation in a layer of the neural network
 
 	dH = grads["dH"+str(layer)] # Gradient of the loss with respect to the activations of a <layer>
+	N = dH.shape[1]
 	A = cache["A"+str(layer)]
 	H_prev = cache["H"+str(layer-1)]
 	W = theta["W"+str(layer)]
@@ -174,8 +176,8 @@ def back_layer(layer,cache,grads,theta,activation) :
 	elif activation=="sigmoid" :
 		dA = np.multiply(dH,np.multiply(sigmoid(A),(1-sigmoid(A))))
 	
-	dW = np.dot(dA,H_prev.T)
-	db = np.sum(dA,axis=1,keepdims=True)
+	dW =(1./N) * np.dot(dA,H_prev.T) 
+	db =(1./N) * np.sum(dA,axis=1,keepdims=True)
 	dH_prev = np.dot(W.T,dA)
 	grads["dA"+str(layer)] = dA
 	grads["dW"+str(layer)] = dW
@@ -203,16 +205,16 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	grads = {}
 
 	if loss=="sq" :
-		grads["dH"+str(layers-1)] = (Y_hat-Y)/N # The loss is the avreage loss and hence we include the <m> variable
-		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)/N
+		grads["dH"+str(layers-1)] = (Y_hat-Y) # The loss is the avreage loss and hence we include the <m> variable
+		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)
 	elif loss=="ce" :
-		grads["dH"+str(layers-1)] = -(1.0/N)*(Y / Y_hat)
-		grads["dA"+str(layers-1)] = -(Y-Y_hat)/N
+		grads["dH"+str(layers-1)] = -(Y/Y_hat)
+		grads["dA"+str(layers-1)] = -(Y-Y_hat)
 	
 	H_prev = cache["H"+str(layers-2)]
 	dA = grads["dA"+str(layers-1)]
-	grads["dW"+str(layers-1)] = np.dot(dA,H_prev.T)
-	grads["db"+str(layers-1)] = np.sum(dA,axis=1,keepdims=True)
+	grads["dW"+str(layers-1)] = (1./N) * np.dot(dA,H_prev.T)
+	grads["db"+str(layers-1)] = (1./N) * np.sum(dA,axis=1,keepdims=True)
 	grads["dH"+str(layers-2)] = np.dot(theta["W"+str(layers-1)].T,dA)
 	# We have now obtained the gradients at the output layer. We just need to backpropagate through the network to find the gradients of the loss w.r.t the parameters
 
@@ -223,11 +225,13 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	# Need to update the parameters after this
 	return grads
 
-def optimize(theta,grads,update,learning_rate,momentum,algo) :
+def optimize(theta,grads,update,mom,time_step,learning_rate,momentum,algo) :
 	# Function to perform a certain optimization algorithm with the dictionary of gradients given
 	# Parameters - theta - The dictionary of weights and biases which need to be updated
 	#		grads - The dictionary of gradients which will be used to update the parameters 
 	#		update - A dictionary containing the update values at instant <t-1> for the momentum based algorithm
+	#		mom - A dictionary containing the history of the sum of gradients for the adam algorihm
+	#		time_step - The current epoch at which the optimization is taking place
 	#		learning_rate - Rate to be used by the gradient descent algorithm; gradients will be scaled by this factor
 	#		momentum - The momentum parameter for a momentum based algorithm
 	#		algo - Type of optimization to be used(gradient descent, rmsprop, etc.)
@@ -238,10 +242,10 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*grads["db"+str(i)]
 	elif algo == "momentum" :
 		for i in range(1,L+1) :
-			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)]
-			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
-			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
-			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
+			update["W"+str(i)] = momentum*update["W"+str(i)] - learning_rate*grads["dW"+str(i)]
+			update["b"+str(i)] = momentum*update["b"+str(i)] - learning_rate*grads["db"+str(i)]
+			theta["W"+str(i)] = theta["W"+str(i)] + update["W"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] + update["b"+str(i)]
 	elif algo == "nag" :
 		for i in range(1,L+1) :
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
@@ -249,13 +253,28 @@ def optimize(theta,grads,update,learning_rate,momentum,algo) :
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
 	elif algo == "adam" :
-		i = "1"
-	return theta, update
+		beta1 = 0.9
+		beta2 = 0.999
+		epsilon = 1e-8
+		for i in range(1,L+1) :
+			mom["W"+str(i)] = beta1*mom["W"+str(i)] + (1-beta1)*grads["dW"+str(i)]
+			mom["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
+			update["W"+str(i)] = beta2*update["W"+str(i)] + (1-beta2)*(grads["dW"+str(i)]**2)
+			update["W"+str(i)] = update["W"+str(i)] / (1 - beta2**time_step)
+			mom["b"+str(i)] = beta1*mom["b"+str(i)] + (1-beta1)*grads["db"+str(i)]
+			mom["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
+			update["b"+str(i)] = beta2*update["b"+str(i)] + (1-beta2)*(grads["db"+str(i)]**2)
+			update["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
+			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom["W"+str(i)] / (np.sqrt(update["W"+str(i)])+epsilon)
+			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom["b"+str(i)] / (np.sqrt(update["b"+str(i)])+epsilon)
+	return theta, update, mom
 
-def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epcohs, anneal) :
+def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal) :
 	# Function to train the model to identify classes in the dataset
 	# Parameters -  X - input data
 	#		Y - the actual classes
+	#		X_val - the validation dataset
+	#		Y_val - the validation dataset
 	#		sizes - A list consisting of the sizes of each layer in the network
 	#		learning_rate - The learning-rate for the gradient descent optimization algorithm
 	#		momentum - The momentum used for a momentum based optimization algorithm
@@ -277,10 +296,18 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 
 	# First initialize the parameters
 	theta = initialize_parameters(num_hidden,sizes)
-	update = initialize_updates(sizes) # Initialize all the updates to 0
+	update = {}
+	mom = {}
+	update = initialize_updates(sizes,update) # Initialize all the updates to 0
+	mom = initialize_updates(sizes,mom)
 	costs = []
+	val_costs = []
+	time = 0
+	params = {} # A dictionary to hold the copies of all the parameters
 
-	for i in range(epochs) :
+	i = 0
+	ep = 0
+	while ep < epochs :
 		batch_indices = create_mini_batch(N,batch_size)
 		for indices in batch_indices :
 			X_batch = X[:,indices]
@@ -288,17 +315,39 @@ def train(X, Y, sizes, learning_rate, momentum, activation, loss, algo, batch_si
 			Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
 			error = cost(Y_batch,Y_hat,loss)
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes)
-			theta, update = optimize(theta,grads,update,learning_rate,momentum,algo)
-		if i%10 == 0 :
-			print("Cost :"+str(error))
+			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
+			theta, update, mom = optimize(theta,grads,update,mom,time+1,learning_rate,momentum,algo)
+			time = time + 1
+		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
+		error_val = cost(Y_val,Y_val_hat,loss)
+		if (anneal == "true") and (i >= 1):
+			if error_val > val_costs[i-1] :
+				learning_rate = learning_rate / 2
+				theta = params["W"]
+				grads = params["G"]
+				update = params["M"]
+				mom = params["V"]
+				time = time - 1
+			else :
+				val_costs.append(error_val)
+				i = i + 1
+		else :
+			val_costs.append(error_val)
+			i = i + 1
+		if ep % 10 == 0 :
 			costs.append(error)
-	# Need to calculate the accuracy on the cross validation set and the test set
+		if ep % 100 == 0 :
+			print("Training error : Epoch : " + str(ep) + " " + str(error))
+			print("Validation Error : Epoch : " + str(ep) + " " + str(error_val))
+		ep = ep + 1
+		# Need to calculate the accuracy on the cross validation set and the test set
 
-	plt.plot(range(0,epochs,10),costs)
+	plt.plot(range(0,epochs,100),costs)
+	plt.plot(range(epochs),val_costs)
 	plt.xlabel("epoch")
 	plt.ylabel("cost")
 	plt.show()
-	print("Training complete")
+	#print("Training complete")
 	return theta
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
@@ -317,61 +366,8 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 			max_val = max_ind[0]
 		Y_hat[max_val,i] = 1
 		Y_hat[min_ind,i] = 0
-	print(np.sum(Y_hat))
-	print(Y_hat.shape[1])
-	corr = np.sum(Y_test*Y_hat)
-	accuracy = corr*100.0/N
+	accuracy = accuracy_score(Y_test.T,Y_hat.T)
 	return accuracy
-
-#def synthetic_data() :
-#	# Function to test the program on synthetic data
-#	n = 1000
-#	mu = 3.0
-#	sigma = 0.5
-#
-#	mod0 = sigma*np.random.randn(2,n) + np.array([mu,0.0]).reshape((2,1))
-#	label0 = np.zeros((1,n)).astype(int)
-#
-#	mod1 = sigma*np.random.randn(2,n) + np.array([0.0,mu]).reshape((2,1))
-#	label1 = (label0+1).astype(int)
-#
-#	mod2 = sigma*np.random.randn(2,n) + np.array([-mu,0.0]).reshape((2,1))
-#	label2 = (label0+2).astype(int)
-#	
-#	mod3 = sigma*np.random.randn(2,n) + np.array([0.0,-mu]).reshape((2,1))
-#	label3 = (label0+3).astype(int)
-#
-#	X = np.concatenate((mod0, mod1, mod2, mod3),axis=1)
-#	Y = np.concatenate((label0, label1, label2, label3),axis=1)
-#	Y_st = np.zeros((3,4*n)).astype(int)
-#	Y = np.vstack((Y,Y_st))
-#	index_0 = np.where(Y[0][:] == 0); index_n0 = np.where(Y[0][:] != 0)
-#	index_1 = np.where(Y[0][:] == 1)
-#	index_2 = np.where(Y[0][:] == 2)
-#	index_3 = np.where(Y[0][:] == 3)
-#	Y[0][index_n0] = 0
-#	Y[0][index_0] = 1
-#	Y[1][index_1] = 1
-#	Y[2][index_2] = 1
-#	Y[3][index_3] = 1
-#	
-#	assert X.shape == (2,4*n)
-#	assert Y.shape == (4,4*n)
-#
-#	indices = np.arange(4*n)
-#	np.random.shuffle(indices)
-#
-#	X_train = X[:,indices[:3*n]]
-#	Y_train = Y[:,indices[:3*n]]
-#
-#	X_val = X[:,indices[3*n:int(3.5*n)]]
-#	Y_val = Y[:,indices[3*n:int(3.5*n)]]
-#
-#	X_test = X[:,indices[int(3.5*n):]]
-#	Y_test = Y[:,indices[int(3.5*n):]]
-#
-#	data = {"X_train" : X_train,"Y_train" :  Y_train,"X_val" :  X_val,"Y_val" :  Y_val,"X_test" :  X_test,"Y_test" :  Y_test}
-#	return data
 
 def get_data(train_path,val_path,test_path) :
 	# Function to get the data for training
@@ -446,7 +442,7 @@ Y_train = data["Y_train"]
 X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
-theta = train(X_train,Y_train,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
+theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
 print(theta)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
 print("Accuracy :"+str(accuracy))
