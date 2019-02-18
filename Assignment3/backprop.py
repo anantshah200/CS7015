@@ -45,7 +45,7 @@ def initialize_parameters(num_hidden,sizes) :
 	np.random.seed(1234)
 	theta = {}
 	for i in range(1,num_hidden+2) :
-		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1])
+		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1]) * 0.01 # Small tricks to optimize laerning 
 		theta["b"+str(i)] = np.zeros((sizes[i],1),dtype=np.float64)
 	
 	return theta
@@ -56,7 +56,7 @@ def initialize_updates(sizes,update) :
 	#		sizes - The size of each layer in the network
 	num_layers = sizes.shape[0]
 	for i in range(1,num_layers) :
-		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]),dtype=np.float64)
+		update["W"+str(i)] = np.zeros((sizes[i],sizes[i-1]),dtype=np.float64) 
 		update["b"+str(i)] = np.zeros((sizes[i],1),dtype=np.float64)
 	return update
 
@@ -242,10 +242,10 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*grads["db"+str(i)]
 	elif algo == "momentum" :
 		for i in range(1,L+1) :
-			update["W"+str(i)] = momentum*update["W"+str(i)] - learning_rate*grads["dW"+str(i)]
-			update["b"+str(i)] = momentum*update["b"+str(i)] - learning_rate*grads["db"+str(i)]
-			theta["W"+str(i)] = theta["W"+str(i)] + update["W"+str(i)]
-			theta["b"+str(i)] = theta["b"+str(i)] + update["b"+str(i)]
+			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)]
+			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
+			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
 	elif algo == "nag" :
 		for i in range(1,L+1) :
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
@@ -327,6 +327,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		error_val = cost(Y_val,Y_val_hat,loss)
 		if (anneal == "true") and (i >= 1):
 			if error_val > val_costs[i-1] :
+				print("Annealing")
 				learning_rate = learning_rate / 2
 				theta = params["W"]
 				grads = params["G"]
@@ -341,14 +342,14 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			i = i + 1
 		if ep % 1 == 0 :
 			costs.append(error)
-		if ep % 10 == 0 :
+		if ep % 1 == 0 :
 			print("Training error : Epoch : " + str(ep) + " " + str(error))
 			print("Validation Error : Epoch : " + str(ep) + " " + str(error_val))
 		ep = ep + 1
 		# Need to calculate the accuracy on the cross validation set and the test set
 
 	plt.plot(range(0,epochs),costs)
-	plt.plot(range(epochs),val_costs)
+	#plt.plot(range(epochs),val_costs)
 	plt.xlabel("epoch")
 	plt.ylabel("cost")
 	plt.show()
@@ -372,6 +373,24 @@ def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 		Y_hat[min_ind,i] = 0
 	accuracy = accuracy_score(Y_test.T,Y_hat.T)
 	return accuracy
+
+def test_model(X_test,theta,activation,sizes) :
+	# Function to predict the outcomes of the test data
+	Y_hat, trash = feed_forward(X_test,activation,theta,sizes)
+	N = X_test.shape[1]
+	max_val = 0
+	predictions = np.zeros((N,1)).astype(int)
+	
+	for i in range(N) :
+		max_ind = np.where(Y_hat[:,i] == np.amax(Y_hat[:,i]))
+		if (len(max_ind[0]) >= 2) :
+			max_val = max_ind[0][0]
+		else :
+			max_val = max_ind[0]
+		predictions[i] = max_val
+	index = (np.arange(0,N).T).reshape(N,1)
+	predictions = np.hstack((index,predictions))
+	return predictions
 
 def get_data(train_path,val_path,test_path) :
 	# Function to get the data for training
@@ -446,9 +465,10 @@ Y_train = data["Y_train"]
 X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
-#u = {}
-#initialize_updates(sizes,u)
+
 theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
 print(theta)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
+test_out = test_model(X_test,theta,activation,sizes)
+pd.DataFrame(test_out).to_csv("submission.csv", header=["id","label"],index=False)
 print("Accuracy :"+str(accuracy))
