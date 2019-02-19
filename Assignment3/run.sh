@@ -1,1 +1,1 @@
-python backprop.py --lr 0.01 --momentum 0.5 --num_hidden 3 --sizes 100,100,100 --activation sigmoid --loss sq --opt adam --batch_size 20 --epochs 5 --anneal true --save_dir pa1/ --expt_dir pa1/exp1/ --train train.csv --val validation.csv --test test.csv
+python backprop.py --lr 0.0006 --momentum 0.9 --num_hidden 3 --sizes 200,200,200 --activation tanh --loss ce --opt adam --batch_size 20 --epochs 25 --anneal true --save_dir pa1/ --expt_dir pa1/exp1/ --train dl2019pa1/train.csv --val dl2019pa1/valid.csv --test dl2019pa1/test.csv
