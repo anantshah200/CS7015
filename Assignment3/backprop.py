@@ -79,6 +79,12 @@ def tanh(A) :
 	# Implement the tanh function
 	return np.tanh(A)
 
+def relu(A) :
+	# Implements the non-linear relu function
+	index = np.where(A<0)
+	A[index] = A[index]*0.01
+	return A
+
 def softmax(A) :
 	# Given a matrix of values, this function will return the softmax values
 	m = A.shape[0]
@@ -109,6 +115,9 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 		cache["H"+str(layer)] = H
 	elif (activation == "tanh") :
 		H = tanh(A)
+		cache["H"+str(layer)] = H
+	elif (activation == "relu") :
+		H = relu(A)
 		cache["H"+str(layer)] = H
 
 	assert H.shape == (W.shape[0],N)
@@ -175,7 +184,15 @@ def back_layer(layer,cache,grads,theta,activation) :
 		dA = np.multiply(dH,(1-tanh(A)**2))
 	elif activation=="sigmoid" :
 		dA = np.multiply(dH,np.multiply(sigmoid(A),(1-sigmoid(A))))
-	
+	elif activation=="relu" :
+		leak = 0.01
+		index_p = np.where(A>=0)
+		index_n = np.where(A<0)
+		dHdA = np.zeros(dH.shape)
+		dHdA[index_p] = 1
+		dHdA[index_n] = -leak
+		dA = np.multiply(dH, dHdA)
+
 	dW =(1./N) * np.dot(dA,H_prev.T) 
 	db =(1./N) * np.sum(dA,axis=1,keepdims=True)
 	dH_prev = np.dot(W.T,dA)
