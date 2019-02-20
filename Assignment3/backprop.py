@@ -152,27 +152,35 @@ def feed_forward(X,activation,theta,sizes) :
 	assert Y_hat.shape == (sizes[layers-1],N)
 	return Y_hat, cache
 
-def cost(Y,Y_hat,loss) :
+def cost(Y,Y_hat,loss,theta,reg) :
 	# Function to calculate the error in prediction by the neural network
 	# Parameters :  Y - Actual labels for the data
 	#		Y_hat - Predicted probabilities of the labels
 	#		loss - The type of loss (either square error or entropy)
+	#		theta - dictionary containing the parameter vectors
+	#		reg - the regularization parameter
 	assert Y.shape == Y_hat.shape
 	N = Y.shape[1]
 	if (loss == "sq") :
 		error = np.sum((Y-Y_hat)**2)/(2*N)
 	elif (loss == "ce") :
 		error = -np.sum(np.multiply(Y,np.log(Y_hat))) / N
+	L = int(len(theta)/2)
+	reg_error = 0.0
+	for i in range(1,L+1) :
+		reg_error = reg_error + (reg/(2*N))*np.sum(np.square(theta["W"+str(i)]))
+	error = error + reg_error
 	error = np.squeeze(error)
 	return error
 
-def back_layer(layer,cache,grads,theta,activation) :
+def back_layer(layer,cache,grads,theta,activation,reg) :
 	# Function to compute the gradient of the loss with respect to the pre-activation of a layer
 	# Parameters : layer - The current layer we are acting on
 	#		cache - The data stored from the forward propagation step 
 	#		grads - A dictionary containing the gradients of the loss w.r.t the parameters in the network
 	#		theta - A dictionary containing the weights and biases
 	#		activation - The type of activation in a layer of the neural network
+	# 		reg - The regularization factor for the weights
 
 	dH = grads["dH"+str(layer)] # Gradient of the loss with respect to the activations of a <layer>
 	N = dH.shape[1]
@@ -190,10 +198,10 @@ def back_layer(layer,cache,grads,theta,activation) :
 		index_n = np.where(A<0)
 		dHdA = np.zeros(dH.shape)
 		dHdA[index_p] = 1
-		dHdA[index_n] = -leak
+		dHdA[index_n] = leak
 		dA = np.multiply(dH, dHdA)
 
-	dW =(1./N) * np.dot(dA,H_prev.T) 
+	dW =(1./N) * np.dot(dA,H_prev.T) + (reg/N)*W
 	db =(1./N) * np.sum(dA,axis=1,keepdims=True)
 	dH_prev = np.dot(W.T,dA)
 	grads["dA"+str(layer)] = dA
@@ -202,7 +210,7 @@ def back_layer(layer,cache,grads,theta,activation) :
 	grads["dH"+str(layer-1)] = dH_prev
 	return grads
 
-def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
+def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes,reg) :
 	# Function to backpropagate through the network to update the weights
 	# Parameters -  X - The input data
 	#		Y - The output data
@@ -214,7 +222,8 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	#		theta - A dictionary containing the weights and biases
 	#		activation - The type of activation in a layer of the neural network
 	#		sizes - A vector containing the number of neurons in each layer
-	
+	#		reg - The regularization parameter
+
 	# First, we need to calculate the derivative of the loss function w.r.t the output layer
 	
 	layers = int(sizes.shape[0])
@@ -230,13 +239,13 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes) :
 	
 	H_prev = cache["H"+str(layers-2)]
 	dA = grads["dA"+str(layers-1)]
-	grads["dW"+str(layers-1)] = (1./N) * np.dot(dA,H_prev.T)
+	grads["dW"+str(layers-1)] = (1./N) * np.dot(dA,H_prev.T) + (reg/N)*theta["W"+str(layers-1)]
 	grads["db"+str(layers-1)] = (1./N) * np.sum(dA,axis=1,keepdims=True)
 	grads["dH"+str(layers-2)] = np.dot(theta["W"+str(layers-1)].T,dA)
 	# We have now obtained the gradients at the output layer. We just need to backpropagate through the network to find the gradients of the loss w.r.t the parameters
 
 	for i in range(layers-2,0,-1) :
-		grads = back_layer(int(i),cache,grads,theta,activation)
+		grads = back_layer(int(i),cache,grads,theta,activation,reg)
 	
 	# All of the gradients of the loss w.r.t the parameters have been added to the grads dictionary
 	# Need to update the parameters after this
@@ -287,7 +296,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
 	return theta, update, mom, update_t, mom_t
 
-def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal) :
+def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg) :
 	# Function to train the model to identify classes in the dataset
 	# Parameters -  X - input data
 	#		Y - the actual classes
@@ -302,6 +311,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	#		batch_size - Batch size for batch optimization
 	#		epochs - NUmber of iterations for which we train the model
 	#		anneal - Anneal if true
+	#		reg - The regularization parameter
 
 	N = X.shape[1] # Number of training examples
 	num_hidden = sizes.shape[0] - 2
@@ -336,39 +346,37 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			X_batch = X[:,indices]
 			Y_batch = Y[:,indices]
 			Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
-			error = cost(Y_batch,Y_hat,loss)
+			error = cost(Y_batch,Y_hat,loss,theta,reg)
 			if step % 100 == 0 :
 				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error))
-			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes)
+			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
 			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
 			time = time + 1
 			step = step + 1
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
-		error_val = cost(Y_val,Y_val_hat,loss)
+		error_val = cost(Y_val,Y_val_hat,loss,theta,reg)
+		
 		if (anneal == "true") and (i >= 1):
 			if error_val > val_costs[i-1] :
-				print("Annealing")
 				learning_rate = learning_rate / 2
 				theta = params["W"]
 				grads = params["G"]
 				update = params["M"]
 				mom = params["V"]
-			else :
-				val_costs.append(error_val)
-				i = i + 1
-		else :
-			val_costs.append(error_val)
-			i = i + 1
-		if ep % 1 == 0 :
-			costs.append(error)
+
+		val_costs.append(error_val)
+		costs.append(error)
+		i = i + 1
 		ep = ep + 1
 		# Need to calculate the accuracy on the cross validation set and the test set
 
-	plt.plot(range(0,epochs),costs)
-	plt.xlabel("epoch")
-	plt.ylabel("cost")
-	plt.show()
+	print("Training complete")
+	#plt.plot(range(0,epochs),costs)
+	#plt.xlabel("epoch")
+	#plt.ylabel("cost")
+	#plt.show()
+	#print("Training complete")
 	return theta
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
@@ -458,6 +466,7 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
+reg = 0.009
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
@@ -485,8 +494,7 @@ X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
 
-theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal)
-print(theta)
+theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
 test_out = test_model(X_test,theta,activation,sizes)
 pd.DataFrame(test_out).to_csv("submission.csv", header=["id","label"],index=False)
