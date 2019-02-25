@@ -45,7 +45,7 @@ def initialize_parameters(num_hidden,sizes) :
 	np.random.seed(1234)
 	theta = {}
 	for i in range(1,num_hidden+2) :
-		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1]) * np.sqrt(2./(sizes[i] + sizes[i-1])) # Small tricks to optimize laerning 
+		theta["W"+str(i)] = np.random.randn(sizes[i],sizes[i-1]) * np.sqrt(2./(sizes[i] + sizes[i-1])) # Xavier Initialization
 		theta["b"+str(i)] = np.zeros((sizes[i],1),dtype=np.float64)
 	
 	return theta
@@ -168,7 +168,7 @@ def cost(Y,Y_hat,loss,theta,reg) :
 	L = int(len(theta)/2)
 	reg_error = 0.0
 	for i in range(1,L+1) :
-		reg_error = reg_error + (reg/(2*N))*np.sum(np.square(theta["W"+str(i)]))
+		reg_error = reg_error + (reg/(2*N))*np.sum(np.square(theta["W"+str(i)])) # L2 norm regularization
 	error = error + reg_error
 	error = np.squeeze(error)
 	return error
@@ -232,7 +232,13 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes,reg) :
 
 	if loss=="sq" :
 		grads["dH"+str(layers-1)] = (Y_hat-Y) # The loss is the avreage loss and hence we include the <m> variable
-		grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)
+		#grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)
+		true_class = np.where(Y==1)
+		Y_L = Y_hat(true_class[0])
+		assert Y_L.shape == (1,N)
+		Y_L = np.tile(Y_L,(NUM_CLASSES,1)) 
+		Y_sqsum = np.tile(np.sum(Y_hat**2,axis=1,keepdims=True),(NUM_CLASSES,1))
+		grads["dA"+str(layers-1)] = (Y_hat) * (-Y_sqsum+Y_hat-Y+Y_L)
 	elif loss=="ce" :
 		grads["dH"+str(layers-1)] = -(Y/Y_hat)
 		grads["dA"+str(layers-1)] = -(Y-Y_hat)
@@ -285,7 +291,6 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 		for i in range(1,L+1) :
 			mom["W"+str(i)] = beta1*mom["W"+str(i)] + (1-beta1)*grads["dW"+str(i)]
 			mom_t["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
-			#print("[W"+str(i)+"] : "+str(update["W"+str(i)]))
 			update["W"+str(i)] = beta2*update["W"+str(i)] + (1-beta2)*(grads["dW"+str(i)]**2)
 			update_t["W"+str(i)] = update["W"+str(i)] / (1 - beta2**time_step)
 			mom["b"+str(i)] = beta1*mom["b"+str(i)] + (1-beta1)*grads["db"+str(i)]
@@ -372,11 +377,6 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		# Need to calculate the accuracy on the cross validation set and the test set
 
 	print("Training complete")
-	#plt.plot(range(0,epochs),costs)
-	#plt.xlabel("epoch")
-	#plt.ylabel("cost")
-	#plt.show()
-	#print("Training complete")
 	return theta
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
@@ -424,21 +424,24 @@ def get_data(train_path,val_path,test_path) :
 	train = np.array(train_data)
 	val = np.array(val_data)
 	test = np.array(test_data)
+	num_test = 55000
+	np.random.seed(2)
+	num_indices = np.random.permutation(num_test)
 
-	X_train = train[:,1:NUM_FEATURES+1].T
+	X_train = train[num_indices,1:NUM_FEATURES+1].T
 	X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train))
 	
-	assert X_train.shape == (NUM_FEATURES,train.shape[0])
+	assert X_train.shape == (NUM_FEATURES,num_test)
 
-	Y_train = train[:,NUM_FEATURES+1,None].T
-	Y_st = np.zeros((NUM_CLASSES-1,train.shape[0])).astype(int)
+	Y_train = train[num_indices,NUM_FEATURES+1,None].T
+	Y_st = np.zeros((NUM_CLASSES-1,num_test)).astype(int)
 	Y_train = np.vstack((Y_train,Y_st))
 	init_index = np.where(Y_train[0,:] == 0)
 	for i in range(1,NUM_CLASSES) :
 		Y_train[i,np.where(Y_train[0][:] == int(i))] = 1
 	Y_train[0,np.where(Y_train[0][:] != 0)] = 0
 	Y_train[0,init_index] = 1
-	assert Y_train.shape == (NUM_CLASSES,train.shape[0])
+	assert Y_train.shape == (NUM_CLASSES,num_test)
 
 	X_val = val[:,1:NUM_FEATURES+1].T
 	X_val = (X_val - np.mean(X_val))/np.sqrt(np.var(X_val))
@@ -466,7 +469,7 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
-reg = 0.009
+reg = 0.008
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
@@ -496,6 +499,8 @@ X_test = data["X_test"]
 
 theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
+train_accuracy = test_accuracy(X_train,Y_train,theta,activation,sizes)
 test_out = test_model(X_test,theta,activation,sizes)
 pd.DataFrame(test_out).to_csv("submission.csv", header=["id","label"],index=False)
 print("Accuracy :"+str(accuracy))
+print("Training Accuracy :"+str(train_accuracy))
