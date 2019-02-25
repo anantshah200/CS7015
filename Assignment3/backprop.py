@@ -233,11 +233,10 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes,reg) :
 	if loss=="sq" :
 		grads["dH"+str(layers-1)] = (Y_hat-Y) # The loss is the avreage loss and hence we include the <m> variable
 		#grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)
-		true_class = np.where(Y==1)
-		Y_L = Y_hat(true_class[0])
-		assert Y_L.shape == (1,N)
+		true_class = np.where(Y.T==1)
+		Y_L = Y_hat[true_class[1],true_class[0]]
 		Y_L = np.tile(Y_L,(NUM_CLASSES,1)) 
-		Y_sqsum = np.tile(np.sum(Y_hat**2,axis=1,keepdims=True),(NUM_CLASSES,1))
+		Y_sqsum = np.tile(np.sum(Y_hat**2,axis=0,keepdims=True),(NUM_CLASSES,1))
 		grads["dA"+str(layers-1)] = (Y_hat) * (-Y_sqsum+Y_hat-Y+Y_L)
 	elif loss=="ce" :
 		grads["dH"+str(layers-1)] = -(Y/Y_hat)
