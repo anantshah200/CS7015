@@ -113,6 +113,9 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 	assert b.shape == (W.shape[0],1)
 
 	A = np.dot(W,H_prev)+b
+	#eps = 1e-8
+	#A = (A-np.mean(A))/np.sqrt(np.var(A)+eps) # Perform batch normalization on the activations of a layer
+
 	cache["A"+str(layer)] = A
 	if(activation == "sigmoid") :
 		H = sigmoid(A)
@@ -289,7 +292,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 	elif algo == "adam" :
 		beta1 = 0.9
 		beta2 = 0.999
-		epsilon = 1e-6
+		epsilon = 1e-8
 		for i in range(1,L+1) :
 			mom["W"+str(i)] = beta1*mom["W"+str(i)] + (1-beta1)*grads["dW"+str(i)]
 			mom_t["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
@@ -299,7 +302,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			mom_t["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
 			update["b"+str(i)] = beta2*update["b"+str(i)] + (1-beta2)*(grads["db"+str(i)]**2)
 			update_t["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
-			lr = learning_rate * np.sqrt(1-beta2**time_step)/(1-beta1**time_step)
+			#lr = learning_rate * np.sqrt(1-beta2**time_step)/(1-beta1**time_step)
 			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom_t["W"+str(i)] / (np.sqrt(update_t["W"+str(i)])+epsilon)
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
 	return theta, update, mom, update_t, mom_t
@@ -436,14 +439,32 @@ def get_data(train_path,val_path,test_path) :
 
 	N = train.shape[0]
 	X_train = train[:,1:NUM_FEATURES+1].T
-	X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train))
+	eps = 1e-8
+	X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train)+eps)
 
 	#Augment the data by shifting the picture upwards by 1 pixel
-	X_aug_temp = np.reshape(X_train.T,(N,X_COMPONENT,Y_COMPONENT),order='C')
+	X_aug_temp = np.reshape(X_train[:,0:int(N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
 	X_aug_temp = np.roll(X_aug_temp[:],1,axis=1)
-	X_aug = np.reshape(X_aug_temp,(N,NUM_FEATURES)).T
-	assert X_aug.shape == X_train.shape
-	X_train = np.hstack(X_train,X_aug)
+	X_aug = np.reshape(X_aug_temp,(int(N/4),NUM_FEATURES)).T
+	X_bshift_temp = np.reshape(X_train[:,int(N/4):int(N/2)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_bshift_temp = np.roll(X_bshift_temp[:],-1,axis=1)
+	X_bshift = np.reshape(X_bshift_temp,(int(N/4),NUM_FEATURES)).T
+	X_rshift_temp = np.reshape(X_train[:,int(N/2):int(3*N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_rshift_temp = np.roll(X_rshift_temp[:],1,axis=2)
+	X_rshift = np.reshape(X_rshift_temp,(int(N/4),NUM_FEATURES)).T
+	X_lshift_temp = np.reshape(X_train[:,int(3*N/4):N].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_lshift_temp = np.roll(X_lshift_temp[:],-1,axis=2)
+	X_lshift = np.reshape(X_lshift_temp,(int(N/4),NUM_FEATURES)).T
+	assert X_aug.shape == (NUM_FEATURES,int(N/4))
+	assert X_bshift.shape == (NUM_FEATURES,int(N/4))
+	assert X_rshift.shape == (NUM_FEATURES,int(N/4))
+	assert X_lshift.shape == (NUM_FEATURES,int(N/4))
+	assert X_bshift.shape == X_aug.shape
+
+	X_train = np.hstack((X_train,X_aug))
+	X_train = np.hstack((X_train,X_bshift))
+	X_train = np.hstack((X_train,X_rshift))
+	X_train = np.hstack((X_train,X_lshift))
 	assert X_train.shape == (NUM_FEATURES,2*N)
 
 	Y_train = train[:,NUM_FEATURES+1,None].T
@@ -473,7 +494,6 @@ def get_data(train_path,val_path,test_path) :
 
 	X_test = test[:,1:NUM_FEATURES+1].T
 	X_test = (X_test - np.mean(X_test))/np.sqrt(np.var(X_test))
-	#X_test = (pca_object.fit_transform(X_test.T)).T
 	assert X_test.shape == (NUM_COMPONENTS,test.shape[0])
 
 	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
@@ -484,7 +504,7 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
-reg = 0.001
+reg = 0.003
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
