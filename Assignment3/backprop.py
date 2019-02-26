@@ -11,9 +11,13 @@ import pickle
 import argparse
 import pandas as pd
 from sklearn.metrics import accuracy_score
+from sklearn.decomposition import PCA
 
 NUM_FEATURES = 784
 NUM_CLASSES = 10
+NUM_COMPONENTS = 784 # Top dimensions for PCA
+X_COMPONENT = 28
+Y_COMPONENT = 28
 
 def get_specs() :
 	"Function to get the specifications from the command line arguments"
@@ -232,7 +236,6 @@ def back_prop(X,Y,Y_hat,loss,cache,theta,activation,sizes,reg) :
 
 	if loss=="sq" :
 		grads["dH"+str(layers-1)] = (Y_hat-Y) # The loss is the avreage loss and hence we include the <m> variable
-		#grads["dA"+str(layers-1)] = (Y_hat - Y) * Y_hat * (1-Y_hat)
 		true_class = np.where(Y.T==1)
 		Y_L = Y_hat[true_class[1],true_class[0]]
 		Y_L = np.tile(Y_L,(NUM_CLASSES,1)) 
@@ -286,7 +289,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 	elif algo == "adam" :
 		beta1 = 0.9
 		beta2 = 0.999
-		epsilon = 1e-8
+		epsilon = 1e-6
 		for i in range(1,L+1) :
 			mom["W"+str(i)] = beta1*mom["W"+str(i)] + (1-beta1)*grads["dW"+str(i)]
 			mom_t["W"+str(i)] = mom["W"+str(i)] / (1 - beta1**time_step)
@@ -296,6 +299,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			mom_t["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
 			update["b"+str(i)] = beta2*update["b"+str(i)] + (1-beta2)*(grads["db"+str(i)]**2)
 			update_t["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
+			lr = learning_rate * np.sqrt(1-beta2**time_step)/(1-beta1**time_step)
 			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom_t["W"+str(i)] / (np.sqrt(update_t["W"+str(i)])+epsilon)
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
 	return theta, update, mom, update_t, mom_t
@@ -352,7 +356,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
 			error = cost(Y_batch,Y_hat,loss,theta,reg)
 			if step % 100 == 0 :
-				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error))
+				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error) + " Learning Rate : " + str(learning_rate))
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
 			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
@@ -361,17 +365,22 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
 		error_val = cost(Y_val,Y_val_hat,loss,theta,reg)
 		
-		if (anneal == "true") and (i >= 1):
+		if i==0 :
+			i = i + 1
+			val_costs.append(error_val)
+
+		if (anneal == "true") and (i>=1) :
 			if error_val > val_costs[i-1] :
 				learning_rate = learning_rate / 2
 				theta = params["W"]
 				grads = params["G"]
 				update = params["M"]
 				mom = params["V"]
+			else :
+				i = i + 1
+				val_costs.append(error_val)
 
-		val_costs.append(error_val)
 		costs.append(error)
-		i = i + 1
 		ep = ep + 1
 		# Need to calculate the accuracy on the cross validation set and the test set
 
@@ -417,34 +426,40 @@ def test_model(X_test,theta,activation,sizes) :
 
 def get_data(train_path,val_path,test_path) :
 	# Function to get the data for training
+	# Augment data so as to obtain more training examples by left shifting the pixels by 1
 	train_data = pd.read_csv(train_path)
 	val_data = pd.read_csv(val_path)
 	test_data = pd.read_csv(test_path)
 	train = np.array(train_data)
 	val = np.array(val_data)
 	test = np.array(test_data)
-	num_test = 55000
-	np.random.seed(2)
-	num_indices = np.random.permutation(num_test)
 
-	X_train = train[num_indices,1:NUM_FEATURES+1].T
+	N = train.shape[0]
+	X_train = train[:,1:NUM_FEATURES+1].T
 	X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train))
-	
-	assert X_train.shape == (NUM_FEATURES,num_test)
 
-	Y_train = train[num_indices,NUM_FEATURES+1,None].T
-	Y_st = np.zeros((NUM_CLASSES-1,num_test)).astype(int)
+	#Augment the data by shifting the picture upwards by 1 pixel
+	X_aug_temp = np.reshape(X_train.T,(N,X_COMPONENT,Y_COMPONENT),order='C')
+	X_aug_temp = np.roll(X_aug_temp[:],1,axis=1)
+	X_aug = np.reshape(X_aug_temp,(N,NUM_FEATURES)).T
+	assert X_aug.shape == X_train.shape
+	X_train = np.hstack(X_train,X_aug)
+	assert X_train.shape == (NUM_FEATURES,2*N)
+
+	Y_train = train[:,NUM_FEATURES+1,None].T
+	Y_st = np.zeros((NUM_CLASSES-1,N)).astype(int)
 	Y_train = np.vstack((Y_train,Y_st))
 	init_index = np.where(Y_train[0,:] == 0)
 	for i in range(1,NUM_CLASSES) :
 		Y_train[i,np.where(Y_train[0][:] == int(i))] = 1
 	Y_train[0,np.where(Y_train[0][:] != 0)] = 0
 	Y_train[0,init_index] = 1
-	assert Y_train.shape == (NUM_CLASSES,num_test)
+	Y_train = np.hstack((Y_train,Y_train))
+	assert Y_train.shape == (NUM_CLASSES,2*N)
 
 	X_val = val[:,1:NUM_FEATURES+1].T
 	X_val = (X_val - np.mean(X_val))/np.sqrt(np.var(X_val))
-	assert X_val.shape == (NUM_FEATURES,val.shape[0])
+	assert X_val.shape == (NUM_COMPONENTS,val.shape[0])
 
 	Y_val = val[:,NUM_FEATURES+1,None].T
 	Y_st = np.zeros((NUM_CLASSES-1,val.shape[0])).astype(int)
@@ -458,7 +473,8 @@ def get_data(train_path,val_path,test_path) :
 
 	X_test = test[:,1:NUM_FEATURES+1].T
 	X_test = (X_test - np.mean(X_test))/np.sqrt(np.var(X_test))
-	assert X_test.shape == (NUM_FEATURES,test.shape[0])
+	#X_test = (pca_object.fit_transform(X_test.T)).T
+	assert X_test.shape == (NUM_COMPONENTS,test.shape[0])
 
 	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
 
@@ -468,12 +484,12 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
-reg = 0.008
+reg = 0.001
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
 sizes = []
-sizes.append(NUM_FEATURES)
+sizes.append(NUM_COMPONENTS)
 for num in hidden_sizes.split(',') :
 	sizes.append(int(num))
 sizes.append(NUM_CLASSES)
