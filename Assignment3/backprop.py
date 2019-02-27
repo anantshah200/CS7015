@@ -294,7 +294,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
 			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
-			theta["b"+str(i)] = theta["b"+str(i)] - update["W"+str(i)]
+			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
 	elif algo == "adam" :
 		beta1 = 0.9
 		beta2 = 0.999
@@ -340,6 +340,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 
 	# First initialize the parameters
 	theta = initialize_parameters(num_hidden,sizes)
+	theta_t = initialize_parameters(num_hidden,sizes) # Temporary parameters for NAG
 	update = {}
 	mom = {}
 	update_t = {}
@@ -355,7 +356,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 
 	i = 0 # A counter for the indexing in the list storing the validation error
 	ep = 0 # Counter for the number of epochs
-	patience = 4 # The number of epochs after which we check if the validation loss has decreased or not
+	patience = 5 # The number of epochs after which we check if the validation loss has decreased or not
 	val_count = 0 # Number of epochs for which the validation error has not decreased
 
 	while ep < epochs :
@@ -370,7 +371,17 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			error = cost(Y_batch,Y_hat,loss,theta,reg)
 			if step % 100 == 0 :
 				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error) + " Learning Rate : " + str(learning_rate))
-			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
+			if algo == "nag" :
+				L = int(len(theta)/2)
+				for k in range(1,L+1) :
+					update_t["W"+str(k)] = update["W"+str(k)] * momentum
+					update_t["b"+str(k)] = update["b"+str(k)] * momentum
+					theta_t["W"+str(k)] = theta["W"+str(k)] - update_t["W"+str(k)]
+					theta_t["b"+str(k)] = theta["b"+str(k)] - update_t["b"+str(k)]
+				grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta_t,activation,sizes,reg)
+
+			else :
+				grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
 			time = time + 1
 			step = step + 1
