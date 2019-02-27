@@ -477,33 +477,30 @@ def get_data(train_path,val_path,test_path) :
 
 	N = train.shape[0]
 	X_train = train[:,1:NUM_FEATURES+1].T / 255.0
-	eps = 1e-8
-	#X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train)+eps)
 
 	#Augment the data by shifting the picture upwards by 1 pixel
-	X_aug_temp = np.reshape(X_train[:,0:int(N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_aug_temp = np.reshape(X_train[:,0:int(N/2)].T,(int(N/2),X_COMPONENT,Y_COMPONENT),order='C')
 	X_aug_temp = np.roll(X_aug_temp[:],1,axis=1)
-	X_aug = np.reshape(X_aug_temp,(int(N/4),NUM_FEATURES)).T
-	X_bshift_temp = np.reshape(X_train[:,int(N/4):int(N/2)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_aug = np.reshape(X_aug_temp,(int(N/2),NUM_FEATURES)).T
+	X_bshift_temp = np.reshape(X_train[:,int(N/2):int(N)].T,(int(N/2),X_COMPONENT,Y_COMPONENT),order='C')
 	X_bshift_temp = np.roll(X_bshift_temp[:],-1,axis=1)
-	X_bshift = np.reshape(X_bshift_temp,(int(N/4),NUM_FEATURES)).T
-	X_rshift_temp = np.reshape(X_train[:,int(N/2):int(3*N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_bshift = np.reshape(X_bshift_temp,(int(N/2),NUM_FEATURES)).T
+	X_rshift_temp = np.reshape(X_train[:,0:int(N/2)].T,(int(N/2),X_COMPONENT,Y_COMPONENT),order='C')
 	X_rshift_temp = np.roll(X_rshift_temp[:],1,axis=2)
-	X_rshift = np.reshape(X_rshift_temp,(int(N/4),NUM_FEATURES)).T
-	X_lshift_temp = np.reshape(X_train[:,int(3*N/4):N].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
+	X_rshift = np.reshape(X_rshift_temp,(int(N/2),NUM_FEATURES)).T
+	X_lshift_temp = np.reshape(X_train[:,int(N/2):N].T,(int(N/2),X_COMPONENT,Y_COMPONENT),order='C')
 	X_lshift_temp = np.roll(X_lshift_temp[:],-1,axis=2)
-	X_lshift = np.reshape(X_lshift_temp,(int(N/4),NUM_FEATURES)).T
-	assert X_aug.shape == (NUM_FEATURES,int(N/4))
-	assert X_bshift.shape == (NUM_FEATURES,int(N/4))
-	assert X_rshift.shape == (NUM_FEATURES,int(N/4))
-	assert X_lshift.shape == (NUM_FEATURES,int(N/4))
-	assert X_bshift.shape == X_aug.shape
+	X_lshift = np.reshape(X_lshift_temp,(int(N/2),NUM_FEATURES)).T
+	assert X_aug.shape == (NUM_FEATURES,int(N/2))
+	assert X_bshift.shape == (NUM_FEATURES,int(N/2))
+	assert X_rshift.shape == (NUM_FEATURES,int(N/2))
+	assert X_lshift.shape == (NUM_FEATURES,int(N/2))
 
 	X_train = np.hstack((X_train,X_aug))
 	X_train = np.hstack((X_train,X_bshift))
 	X_train = np.hstack((X_train,X_rshift))
 	X_train = np.hstack((X_train,X_lshift))
-	assert X_train.shape == (NUM_FEATURES,2*N)
+	assert X_train.shape == (NUM_FEATURES,3*N)
 
 	Y_train = train[:,NUM_FEATURES+1,None].T
 	Y_st = np.zeros((NUM_CLASSES-1,N)).astype(int)
@@ -513,11 +510,11 @@ def get_data(train_path,val_path,test_path) :
 		Y_train[i,np.where(Y_train[0][:] == int(i))] = 1
 	Y_train[0,np.where(Y_train[0][:] != 0)] = 0
 	Y_train[0,init_index] = 1
-	Y_train = np.hstack((Y_train,Y_train))
-	assert Y_train.shape == (NUM_CLASSES,2*N)
+	Y_temp = np.hstack((Y_train,Y_train))
+	Y_train = np.hstack((Y_train,Y_temp))
+	assert Y_train.shape == (NUM_CLASSES,3*N)
 
 	X_val = val[:,1:NUM_FEATURES+1].T / 255.0
-	#X_val = (X_val - np.mean(X_val))/np.sqrt(np.var(X_val))
 	assert X_val.shape == (NUM_COMPONENTS,val.shape[0])
 
 	Y_val = val[:,NUM_FEATURES+1,None].T
@@ -531,7 +528,6 @@ def get_data(train_path,val_path,test_path) :
 	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
 
 	X_test = test[:,1:NUM_FEATURES+1].T / 255.0
-	#X_test = (X_test - np.mean(X_test))/np.sqrt(np.var(X_test))
 	assert X_test.shape == (NUM_COMPONENTS,test.shape[0])
 
 	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
