@@ -41,6 +41,15 @@ def get_specs() :
 	args = parser.parse_args()
 	return args
 
+def save_weights(theta, epoch, save_dir) :
+	with open(save_dir +'weights_{}.pkl'.format(epoch),'w') as f:
+		pickle.dump(theta,f)
+
+def load_weights(state, save_dir) :
+	with open(save_dir +'weights_{}.pkl'.format(state)) as f :
+		theta = pickle.load(f)
+	return theta
+
 def initialize_parameters(num_hidden,sizes) :
 	# Function to randomly initialize the parameters 
 	# Parameters : num_hidden - Number of hidden layers  
@@ -113,9 +122,6 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 	assert b.shape == (W.shape[0],1)
 
 	A = np.dot(W,H_prev)+b
-	#eps = 1e-8
-	#A = (A-np.mean(A))/np.sqrt(np.var(A)+eps) # Perform batch normalization on the activations of a layer
-
 	cache["A"+str(layer)] = A
 	if(activation == "sigmoid") :
 		H = sigmoid(A)
@@ -302,12 +308,11 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			mom_t["b"+str(i)] = mom["b"+str(i)] / (1 - beta1**time_step)
 			update["b"+str(i)] = beta2*update["b"+str(i)] + (1-beta2)*(grads["db"+str(i)]**2)
 			update_t["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
-			#lr = learning_rate * np.sqrt(1-beta2**time_step)/(1-beta1**time_step)
 			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom_t["W"+str(i)] / (np.sqrt(update_t["W"+str(i)])+epsilon)
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
 	return theta, update, mom, update_t, mom_t
 
-def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg) :
+def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg, save_dir) :
 	# Function to train the model to identify classes in the dataset
 	# Parameters -  X - input data
 	#		Y - the actual classes
@@ -353,6 +358,8 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	while ep < epochs :
 		step = 0
 		batch_indices = create_mini_batch(N,batch_size)
+		if ep >= 1 :
+			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 		for indices in batch_indices :
 			X_batch = X[:,indices]
 			Y_batch = Y[:,indices]
@@ -361,17 +368,13 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			if step % 100 == 0 :
 				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error) + " Learning Rate : " + str(learning_rate))
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
-			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
+			#params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
 			time = time + 1
 			step = step + 1
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
 		error_val = cost(Y_val,Y_val_hat,loss,theta,reg)
 		
-		if i==0 :
-			i = i + 1
-			val_costs.append(error_val)
-
 		if (anneal == "true") and (i>=1) :
 			if error_val > val_costs[i-1] :
 				learning_rate = learning_rate / 2
@@ -379,10 +382,17 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 				grads = params["G"]
 				update = params["M"]
 				mom = params["V"]
+				time = time - int(N/batch_size)
 			else :
+				#save_weights(theta,ep,save_dir)
 				i = i + 1
 				val_costs.append(error_val)
 
+		if i==0 :
+			#save_weights(theta,ep,save_dir)
+			i = i + 1
+			val_costs.append(error_val)
+		
 		costs.append(error)
 		ep = ep + 1
 		# Need to calculate the accuracy on the cross validation set and the test set
@@ -438,9 +448,9 @@ def get_data(train_path,val_path,test_path) :
 	test = np.array(test_data)
 
 	N = train.shape[0]
-	X_train = train[:,1:NUM_FEATURES+1].T
+	X_train = train[:,1:NUM_FEATURES+1].T / 255.0
 	eps = 1e-8
-	X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train)+eps)
+	#X_train = (X_train - np.mean(X_train))/np.sqrt(np.var(X_train)+eps)
 
 	#Augment the data by shifting the picture upwards by 1 pixel
 	X_aug_temp = np.reshape(X_train[:,0:int(N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
@@ -478,8 +488,8 @@ def get_data(train_path,val_path,test_path) :
 	Y_train = np.hstack((Y_train,Y_train))
 	assert Y_train.shape == (NUM_CLASSES,2*N)
 
-	X_val = val[:,1:NUM_FEATURES+1].T
-	X_val = (X_val - np.mean(X_val))/np.sqrt(np.var(X_val))
+	X_val = val[:,1:NUM_FEATURES+1].T / 255.0
+	#X_val = (X_val - np.mean(X_val))/np.sqrt(np.var(X_val))
 	assert X_val.shape == (NUM_COMPONENTS,val.shape[0])
 
 	Y_val = val[:,NUM_FEATURES+1,None].T
@@ -492,8 +502,8 @@ def get_data(train_path,val_path,test_path) :
 	Y_val[0,init_val] = 1
 	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
 
-	X_test = test[:,1:NUM_FEATURES+1].T
-	X_test = (X_test - np.mean(X_test))/np.sqrt(np.var(X_test))
+	X_test = test[:,1:NUM_FEATURES+1].T / 255.0
+	#X_test = (X_test - np.mean(X_test))/np.sqrt(np.var(X_test))
 	assert X_test.shape == (NUM_COMPONENTS,test.shape[0])
 
 	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
@@ -504,7 +514,7 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
-reg = 0.003
+reg = 0.002
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
@@ -524,6 +534,7 @@ anneal = args.anneal
 train_path = args.train
 val_path = args.val
 test_path = args.test
+save_dir = args.save_dir
 
 data = get_data(train_path, val_path, test_path)
 X_train = data["X_train"]
@@ -532,7 +543,7 @@ X_val = data["X_val"]
 Y_val = data["Y_val"]
 X_test = data["X_test"]
 
-theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg)
+theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg, save_dir)
 accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
 train_accuracy = test_accuracy(X_train,Y_train,theta,activation,sizes)
 test_out = test_model(X_test,theta,activation,sizes)
