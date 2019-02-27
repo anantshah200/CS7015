@@ -42,11 +42,11 @@ def get_specs() :
 	return args
 
 def save_weights(theta, epoch, save_dir) :
-	with open(save_dir +'weights_{}.pkl'.format(epoch),'w') as f:
+	with open(save_dir +'weights_{}.pkl'.format(epoch),'wb') as f:
 		pickle.dump(theta,f)
 
 def load_weights(state, save_dir) :
-	with open(save_dir +'weights_{}.pkl'.format(state)) as f :
+	with open(save_dir +'weights_{}.pkl'.format(state),'rb') as f :
 		theta = pickle.load(f)
 	return theta
 
@@ -348,13 +348,16 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	update_t = initialize_updates(sizes,update_t)
 	mom = initialize_updates(sizes,mom)
 	mom_t = initialize_updates(sizes,mom_t)
-	costs = []
-	val_costs = []
+	costs = [] # A list containing the cost after each step
+	val_costs = [] # A list containing the validation error after each epoch
 	time = 0
 	params = {} # A dictionary to hold the copies of all the parameters
 
-	i = 0
-	ep = 0
+	i = 0 # A counter for the indexing in the list storing the validation error
+	ep = 0 # Counter for the number of epochs
+	patience = 4 # The number of epochs after which we check if the validation loss has decreased or not
+	val_count = 0 # Number of epochs for which the validation error has not decreased
+
 	while ep < epochs :
 		step = 0
 		batch_indices = create_mini_batch(N,batch_size)
@@ -368,15 +371,17 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			if step % 100 == 0 :
 				print("Step : " + str(step) + " Epoch : " + str(ep) + " Error : " + str(error) + " Learning Rate : " + str(learning_rate))
 			grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
-			#params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
 			time = time + 1
 			step = step + 1
-		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes)
-		error_val = cost(Y_val,Y_val_hat,loss,theta,reg)
-		
+
+		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes) # Calculating the error on the validation set
+		error_val = cost(Y_val,Y_val_hat,loss,theta,reg) # Calculating the error on the validation set
+
 		if (anneal == "true") and (i>=1) :
 			if error_val > val_costs[i-1] :
+				# If the validation error increases, re-run the whole epoch
+				val_count = val_count + 1
 				learning_rate = learning_rate / 2
 				theta = params["W"]
 				grads = params["G"]
@@ -384,18 +389,30 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 				mom = params["V"]
 				time = time - int(N/batch_size)
 			else :
-				#save_weights(theta,ep,save_dir)
+				i = i + 1
+				val_count = 0
+				val_costs.append(error_val)
+			save_weights(theta,ep,save_dir)
+		elif (anneal == "false") and (i>=1) :
+			if error_val > val_costs[i-1] :
+				val_count = val_count + 1
+			else :
+				val_count = 0
 				i = i + 1
 				val_costs.append(error_val)
+			save_weights(theta,ep,save_dir)
 
 		if i==0 :
-			#save_weights(theta,ep,save_dir)
+			save_weights(theta,ep,save_dir)
 			i = i + 1
 			val_costs.append(error_val)
 		
+		if (val_count == patience) :
+			theta = load_weights(ep-patience,save_dir)
+			return theta
+
 		costs.append(error)
 		ep = ep + 1
-		# Need to calculate the accuracy on the cross validation set and the test set
 
 	print("Training complete")
 	return theta
