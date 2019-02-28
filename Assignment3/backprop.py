@@ -126,7 +126,13 @@ def forward_layer(H_prev,activation,W,b,layer,cache) :
 	assert H_prev.shape[0] == W.shape[1]
 	assert b.shape == (W.shape[0],1)
 
+	#eps = 1e-8
 	A = np.dot(W,H_prev)+b
+	#mu = (1./N) * np.sum(A,axis=1,keepdims=True)
+	#var = (1./N) * np.sum((A-mu)**2,axis=1,keepdims=True)
+	#A_temp = (A-mu) / np.sqrt(var+eps)
+	#A = gamma*A_temp + beta
+
 	cache["A"+str(layer)] = A
 	if(activation == "sigmoid") :
 		H = sigmoid(A)
@@ -288,18 +294,21 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 		for i in range(1,L+1) :
 			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*grads["dW"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*grads["db"+str(i)]
+
 	elif algo == "momentum" :
 		for i in range(1,L+1) :
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)]
 			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
+
 	elif algo == "nag" :
 		for i in range(1,L+1) :
 			update["W"+str(i)] = momentum*update["W"+str(i)] + learning_rate*grads["dW"+str(i)] # grads will be calculated differently for this case
 			update["b"+str(i)] = momentum*update["b"+str(i)] + learning_rate*grads["db"+str(i)]
 			theta["W"+str(i)] = theta["W"+str(i)] - update["W"+str(i)]
 			theta["b"+str(i)] = theta["b"+str(i)] - update["b"+str(i)]
+
 	elif algo == "adam" :
 		beta1 = 0.9
 		beta2 = 0.999
@@ -315,6 +324,7 @@ def optimize(theta,grads,update,mom,update_t,mom_t,time_step,learning_rate,momen
 			update_t["b"+str(i)] = update["b"+str(i)] / (1 - beta2**time_step)
 			theta["W"+str(i)] = theta["W"+str(i)] - learning_rate*mom_t["W"+str(i)] / (np.sqrt(update_t["W"+str(i)])+epsilon)
 			theta["b"+str(i)] = theta["b"+str(i)] - learning_rate*mom_t["b"+str(i)] / (np.sqrt(update_t["b"+str(i)])+epsilon)
+
 	return theta, update, mom, update_t, mom_t
 
 def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg, save_dir, expt_dir, pretrain, state, testing) :
@@ -349,7 +359,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		ep = state
 	else :
 		theta = initialize_parameters(num_hidden,sizes)
-		ep = 0
+		ep = 1
 	theta_t = initialize_parameters(num_hidden,sizes) # Temporary parameters for NAG
 	update = {}
 	mom = {}
@@ -361,30 +371,23 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	mom_t = initialize_updates(sizes,mom_t)
 	costs = [] # A list containing the cost after each step
 	val_costs = [] # A list containing the validation error after each epoch
+	val_costs_t = [] # This list contains the validation costs as the above one ignores some of them due to annealing
 	time = 0
 	params = {} # A dictionary to hold the copies of all the parameters
 
 	i = 0 # A counter for the indexing in the list storing the validation error
-	patience = 5 # The number of epochs after which we check if the validation loss has decreased or not
+	patience = 10 # The number of epochs after which we check if the validation loss has decreased or not
 	val_count = 0 # Number of epochs for which the validation error has not decreased
 
-	while ep < epochs :
+	while ep <= epochs :
 		step = 0
 		batch_indices = create_mini_batch(N,batch_size)
-		if ep >= 1 :
+		if ep >= 2 :
 			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 		for indices in batch_indices :
 			X_batch = X[:,indices]
 			Y_batch = Y[:,indices]
-			Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
-			error = cost(Y_batch,Y_hat,loss,theta,reg)
-			if step % 100 == 0 :
-				#train_error = 100 - test_accuracy(X_train,Y_train,theta,activation,sizes) * 100
-				#val_error = 100 - test_accuracy(X_val,Y_val,theta,activation,sizes) * 100
-				with open(expt_dir+"log_train.txt",'a+') as f :
-					f.write(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(error) + ", lr: " + str(learning_rate)+"\n")
-	#			with open(expt_dir+"log_val.txt",'a+') as f :
-	#				f.write(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(val_error) + ", lr: " + str(learning_rate)+"\n")
+
 			if algo == "nag" :
 				L = int(len(theta)/2)
 				for k in range(1,L+1) :
@@ -392,18 +395,34 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 					update_t["b"+str(k)] = update["b"+str(k)] * momentum
 					theta_t["W"+str(k)] = theta["W"+str(k)] - update_t["W"+str(k)]
 					theta_t["b"+str(k)] = theta["b"+str(k)] - update_t["b"+str(k)]
+				Y_hat, cache = feed_forward(X_batch,activation,theta_t,sizes)
+				error = cost(Y_batch,Y_hat,loss,theta_t,reg)
 				grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta_t,activation,sizes,reg)
 
 			else :
+				Y_hat, cache = feed_forward(X_batch,activation,theta,sizes)
+				error = cost(Y_batch,Y_hat,loss,theta,reg)
 				grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
+
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
+	#		if step%100 == 0 :
+				#train_error = 100 - test_accuracy(X_train,Y_train,theta,activation,sizes) * 100
+				#val_error = 100 - test_accuracy(X_val,Y_val,theta,activation,sizes) * 100
+	#			with open(expt_dir+"log_train.txt",'a+') as f :
+	#			print(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(error) + ", lr: " + str(learning_rate))
+	#			with open(expt_dir+"log_val.txt",'a+') as f :
+	#				f.write(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(val_error) + ", lr: " + str(learning_rate)+"\n")
 			time = time + 1
 			step = step + 1
 
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes) # Calculating the error on the validation set
 		error_val = cost(Y_val,Y_val_hat,loss,theta,reg) # Calculating the error on the validation set
 
-		if ((anneal == "true") or (anneal=="True")) and (i>=1) :
+		Y_train_hat, trash = feed_forward(X_train,activation,theta,sizes)
+		error_train = cost(Y_train,Y_train_hat,loss,theta,reg)
+		print(error_train)
+
+		if ((anneal=="true") or (anneal=="True")) and (i>=1) :
 			if error_val > val_costs[i-1] :
 				# If the validation error increases, re-run the whole epoch
 				val_count = val_count + 1
@@ -418,7 +437,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 				val_count = 0
 				val_costs.append(error_val)
 			save_weights(theta,ep,save_dir)
-		elif (anneal == "false" or anneal=="False") and (i>=1) :
+		elif (anneal=="false" or anneal=="False") and (i>=1) :
 			if error_val > val_costs[i-1] :
 				val_count = val_count + 1
 			else :
@@ -434,13 +453,15 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 		
 		if (val_count == patience) :
 			theta = load_weights(ep-patience,save_dir)
-			return theta
+			break
 
-		costs.append(error)
+		costs.append(error_train)
+		val_costs_t.append(error_val)
 		ep = ep + 1
 
+	nn_costs = {"trcosts" : costs, "valcosts" : val_costs_t}
 	print("Training complete")
-	return theta
+	return theta, nn_costs
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
 	# Function to test the accuracy of the trained model
@@ -490,7 +511,8 @@ def get_data(train_path,val_path,test_path) :
 	test = np.array(test_data)
 
 	N = train.shape[0]
-	X_train = train[:,1:NUM_FEATURES+1].T / 255.0
+	eps = 1e-8
+	X_train = train[:,1:NUM_FEATURES+1].T / 255.
 
 	#Augment the data by shifting the picture upwards by 1 pixel
 	X_aug_temp = np.reshape(X_train[:,0:int(N/4)].T,(int(N/4),X_COMPONENT,Y_COMPONENT),order='C')
@@ -514,6 +536,7 @@ def get_data(train_path,val_path,test_path) :
 	X_train = np.hstack((X_train,X_bshift))
 	X_train = np.hstack((X_train,X_rshift))
 	X_train = np.hstack((X_train,X_lshift))
+
 	assert X_train.shape == (NUM_FEATURES,2*N)
 
 	Y_train = train[:,NUM_FEATURES+1,None].T
@@ -527,7 +550,7 @@ def get_data(train_path,val_path,test_path) :
 	Y_train = np.hstack((Y_train,Y_train))
 	assert Y_train.shape == (NUM_CLASSES,2*N)
 
-	X_val = val[:,1:NUM_FEATURES+1].T / 255.0
+	X_val = val[:,1:NUM_FEATURES+1].T / 255.
 	assert X_val.shape == (NUM_COMPONENTS,val.shape[0])
 
 	Y_val = val[:,NUM_FEATURES+1,None].T
@@ -540,7 +563,7 @@ def get_data(train_path,val_path,test_path) :
 	Y_val[0,init_val] = 1
 	assert Y_val.shape == (NUM_CLASSES,val.shape[0])
 
-	X_test = test[:,1:NUM_FEATURES+1].T / 255.0
+	X_test = test[:,1:NUM_FEATURES+1].T / 255.
 	assert X_test.shape == (NUM_COMPONENTS,test.shape[0])
 
 	data = {"X_train" : X_train,"Y_train" : Y_train,"X_val" : X_val,"Y_val" : Y_val,"X_test" : X_test}
@@ -579,8 +602,11 @@ testing = args.testing
 
 if os.path.exists(expt_dir) :
 	shutil.rmtree(expt_dir)
-#os.makedirs(save_dir)
 os.makedirs(expt_dir)
+
+train_path = "dl2019pa1/train.csv"
+val_path = "dl2019pa1/valid.csv"
+test_path = "dl2019pa1/test.csv"
 
 data = get_data(train_path, val_path, test_path)
 X_train = data["X_train"]
@@ -594,10 +620,53 @@ if testing == "True" or testing == "true" :
 	test_out = test_model(X_test,theta,activation,sizes)
 	pd.DataFrame(test_out).to_csv(expt_dir+"predictions_"+str(state)+".csv", header=["id","label"],index=False)
 else :
-	theta = train(X_train,Y_train,X_val,Y_val,sizes, learning_rate, momentum, activation, loss, algo, batch_size, epochs, anneal, reg, save_dir, expt_dir, pretrain, state, testing)
+	theta, trash = train(X_train,Y_train,X_val,Y_val,sizes,learning_rate,momentum,activation,loss,algo,batch_size,epochs,anneal,reg,save_dir,expt_dir,pretrain,state,testing)
 	accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
 	train_accuracy = test_accuracy(X_train,Y_train,theta,activation,sizes)
 	test_out = test_model(X_test,theta,activation,sizes)
 	pd.DataFrame(test_out).to_csv(expt_dir+"test_submission.csv", header=["id","label"],index=False)
 	print("Accuracy :"+str(accuracy))
 	print("Training Accuracy :"+str(train_accuracy))
+
+#C = []
+#V = []
+
+#for i in ["adam","nag","momentum"] :
+#	sizes = np.array([784,100,100,10])
+#	learning_rate = 0.0007
+#	momentum = 0.9
+#	activation = "sigmoid"
+#	loss = "ce"
+#	algo = i
+#	batch_size = 20
+##	epochs = 25
+#	anneal = "False"
+#	save_dir = "pa1/"
+#	expt_dir = "pa1/exp1"
+#	pretrain = "False"
+#	state = 0
+#	testing = "False"
+#	theta, nn_costs = train(X_train,Y_train,X_val,Y_val,sizes,learning_rate,momentum,activation,loss,algo,batch_size,epochs,anneal,reg,save_dir,expt_dir,pretrain,state,testing)
+#	C.append(nn_costs["trcosts"])
+#	V.append(nn_costs["valcosts"])
+#
+#x_epoch = np.linspace(1,epochs,num=epochs)
+#plt.plot(x_epoch,C[0],'-b', label="adam")
+#plt.plot(x_epoch,C[1],'-r', label="nag")
+#plt.plot(x_epoch,C[2],'-y', label="momentum")
+#plt.plot(x_epoch,C[3],'-g', label="gd")
+#plt.legend(loc='upper right')
+#plt.title("Training Loss For Optimizations")
+#plt.xlabel(r"Epochs")
+#plt.ylabel(r"Training Error")
+#plt.show()
+
+#plt.plot(x_epoch,V[0],'-b', label="adam")
+#plt.plot(x_epoch,V[1],'-r', label="nag")
+#plt.plot(x_epoch,V[2],'-y', label="momentum")
+#plt.plot(x_epoch,V[3],'-g', label="gd")
+#plt.title("Validation Loss For Optimizations")
+#plt.legend(loc='upper right')
+#plt.xlabel(r"Epochs")
+#plt.ylabel(r"Validation Error")
+#plt.show()
