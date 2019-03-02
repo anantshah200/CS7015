@@ -25,6 +25,7 @@ def get_specs() :
 	"Function to get the specifications from the command line arguments"
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--lr",type=float,help="initial learning rate of the algorithm")
+	parser.add_argument("--reg",type=float)
 	parser.add_argument("--momentum",type=float,help="momentum to be used by any momentum based algorithm")
 	parser.add_argument("--num_hidden",type=int,help="number of hidden layers in the neural network")
 	parser.add_argument("--sizes",nargs="?")
@@ -352,10 +353,11 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	# First initialize the parameters
 	if pretrain=="True" or pretrain=="true" :
 		theta = load_weights(state,save_dir)
-		ep = state
+		ep = state # Assuming that we start from that epoch itself
 	else :
 		theta = initialize_parameters(num_hidden,sizes)
 		ep = 1
+	ep_init = ep
 	epochs = epochs + ep - 1 # The total number of epochs depends on the starting point
 	theta_t = initialize_parameters(num_hidden,sizes) # Temporary parameters for NAG
 	update = {}
@@ -379,7 +381,7 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 	while ep <= epochs :
 		step = 0
 		batch_indices = create_mini_batch(N,batch_size)
-		if ep >= 2 :
+		if (ep-ep_init) >= 1 :
 			params = {"W" : theta.copy(), "G" : grads.copy(), "M" : update.copy(), "V" : mom.copy()}
 		for indices in batch_indices :
 			X_batch = X[:,indices]
@@ -402,22 +404,20 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 				grads = back_prop(X_batch,Y_batch,Y_hat,loss,cache,theta,activation,sizes,reg)
 
 			theta, update, mom, update_t, mom_t = optimize(theta,grads,update,mom,update_t,mom_t,time+1,learning_rate,momentum,algo)
-	#		if step%100 == 0 :
+			if step%100 == 0 :
 				#train_error = 100 - test_accuracy(X_train,Y_train,theta,activation,sizes) * 100
-				#val_error = 100 - test_accuracy(X_val,Y_val,theta,activation,sizes) * 100
+				#train_error = round(train_error,2)
+				val_error = 100 - test_accuracy(X_val,Y_val,theta,activation,sizes) * 100
+				val_error = round(val_error,2) # Rounding it of to 2 decimal places
 	#			with open(expt_dir+"log_train.txt",'a+') as f :
 	#			print(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(error) + ", lr: " + str(learning_rate))
-	#			with open(expt_dir+"log_val.txt",'a+') as f :
-	#				f.write(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(val_error) + ", lr: " + str(learning_rate)+"\n")
+				with open(expt_dir+"log_val.txt",'a+') as f :
+					f.write(" Epoch " + str(ep) + ", Step  "+str(step)+", Loss: "+str(loss)+ ", Error: " + str(val_error) + ", lr: " + str(learning_rate)+"\n")
 			time = time + 1
 			step = step + 1
 
 		Y_val_hat, trash = feed_forward(X_val,activation,theta,sizes) # Calculating the error on the validation set
 		error_val = cost(Y_val,Y_val_hat,loss,theta,reg) # Calculating the error on the validation set
-
-		Y_train_hat, trash = feed_forward(X_train,activation,theta,sizes)
-		error_train = cost(Y_train,Y_train_hat,loss,theta,reg)
-		print(error_train)
 
 		if ((anneal=="true") or (anneal=="True")) and (i>=1) :
 			if error_val > val_costs[i-1] :
@@ -452,12 +452,10 @@ def train(X, Y, X_val, Y_val, sizes, learning_rate, momentum, activation, loss, 
 			theta = load_weights(ep-patience,save_dir)
 			break
 
-		costs.append(error_train)
 		val_costs_t.append(error_val)
 		ep = ep + 1
 
-	nn_costs = {"trcosts" : costs, "valcosts" : val_costs_t}
-	print("Training complete")
+	nn_costs = {"valcosts" : val_costs_t}
 	return theta, nn_costs
 
 def test_accuracy(X_test,Y_test,theta,activation,sizes) :
@@ -577,7 +575,7 @@ def get_data(train_path,val_path,test_path) :
 args = get_specs()
 learning_rate = args.lr
 momentum = args.momentum
-reg = 0.003
+reg = args.reg
 num_hidden = args.num_hidden
 hidden_sizes = args.sizes
 
@@ -604,14 +602,6 @@ pretrain = args.pretrain
 state = args.state
 testing = args.testing
 
-if os.path.exists(expt_dir) :
-	shutil.rmtree(expt_dir)
-os.makedirs(expt_dir)
-
-train_path = "dl2019pa1/train.csv"
-val_path = "dl2019pa1/valid.csv"
-test_path = "dl2019pa1/test.csv"
-
 data = get_data(train_path, val_path, test_path)
 X_train = data["X_train"]
 Y_train = data["Y_train"]
@@ -632,7 +622,7 @@ else :
 	theta, trash = train(X_train,Y_train,X_val,Y_val,sizes,learning_rate,momentum,activation,loss,algo,batch_size,epochs,anneal,reg,save_dir,expt_dir,pretrain,state,testing)
 	accuracy = test_accuracy(X_val,Y_val,theta,activation,sizes)
 	train_accuracy = test_accuracy(X_train,Y_train,theta,activation,sizes)
-	test_out = test_model(X_test,theta,activation,sizes)
+	test_out = test_model(X_test,theta,activation)
 	pd.DataFrame(test_out).to_csv(expt_dir+"test_submission.csv", header=["id","label"],index=False)
 	print("Accuracy :"+str(accuracy))
 	print("Training Accuracy :"+str(train_accuracy))
