@@ -2,7 +2,10 @@ import numpy as np
 import pandas as pd
 import csv
 from sklearn.metrics import accuracy_score
+<<<<<<< HEAD
 from scipy import ndimage
+=======
+>>>>>>> 8b2ade5fae325ef63344768b2211a8ca7641b34d
 
 layers = 5
 test = {}
@@ -180,12 +183,18 @@ E = np.random.randn(16,5)
 print(E)
 F = np.reshape(E.T,(5,4,4),order='C')
 print("F :"+str(F))
+<<<<<<< HEAD
 G = np.roll(F[:],1,axis=2)
 G = np.reshape(G,(5,16))
+=======
+G = np.roll(F[:],1,axis=1)
+#G = np.reshape(G,(5,16))
+>>>>>>> 8b2ade5fae325ef63344768b2211a8ca7641b34d
 print("G : "+str(G))
 H = np.reshape(G,(5,16))
 H = np.hstack((H.T,H.T))
 print("H "+str(H))
+<<<<<<< HEAD
 
 A = np.array([[[3,3,3],[4,4,4],[5,5,5]],[[6,6,6],[7,7,7],[8,8,8]]])
 C = np.array([0,1])
@@ -212,3 +221,8 @@ C = np.array([[1,2,3],[4,5,6],[7,8,9]])
 k = np.array([0,1,2])
 B = np.flip(A,3)
 print(B)
+=======
+#print(sum_A)
+#print(np.exp(A))
+#aprint("Sizes : " + str(sizes))
+>>>>>>> 8b2ade5fae325ef63344768b2211a8ca7641b34d
